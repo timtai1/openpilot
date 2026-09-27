@@ -557,8 +557,8 @@ msgstr "温和加速"
 
 #: dragonpilot/settings/min-feat.lon.gentle-accel.py:9
 #, python-format
-msgid "Scales maximum acceleration during takeoff and cruise (0.5x - 1.0x). Default is 0.8x. Smoothes out aggressive throttle when lead cars pull away."
-msgstr "按倍数调整起步与巡航时的最大加速力道 (0.5x - 1.0x)。默认值为 0.8x。避免前车驶离时大踩油门，提供更平顺舒适的加速体感。"
+msgid "Scales maximum acceleration during takeoff and cruise (0.5x - 1.0x). Default is 0.5x. Smoothes out aggressive throttle when lead cars pull away."
+msgstr "按倍数调整起步与巡航时的最大加速力道 (0.5x - 1.0x)。默认值为 0.5x。避免前车驶离时大踩油门，提供更平顺舒适的加速体感。"
 
 #: dragonpilot/settings/min-feat.lon.gentle-brake.py:8
 #, python-format

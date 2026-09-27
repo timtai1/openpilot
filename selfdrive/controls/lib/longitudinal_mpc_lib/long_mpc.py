@@ -345,7 +345,7 @@ class LongitudinalMpc:
     self.solver.set(N, "yref", self.yref[N][:COST_E_DIM])
 
     self.params[:,0] = ACCEL_MIN
-    self.params[:,1] = ACCEL_MAX
+    self.params[:,1] = max(0.2, min(ACCEL_MAX, self.cruise_max_accel))
     self.params[:,2] = np.min(x_obstacles, axis=1)
     self.params[:,3] = np.copy(self.a_prev)
     self.params[:,4] = t_follow

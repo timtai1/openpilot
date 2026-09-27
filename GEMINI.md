@@ -67,7 +67,7 @@ If SSH commands return `Connection timed out`, `Host is down`, or `No route to h
 
 ### 4. Gentle Acceleration & Gentle Braking
 - **Parameters**:
-  - `dp_lon_smooth_accel` (Int: `0=0.5x`, `1=0.6x`, `2=0.7x`, `3=0.8x`, `4=0.9x`, `5=1.0x` acceleration multiplier, default index 3: `0.8x`)
+  - `dp_lon_smooth_accel` (Int: `0=0.5x`, `1=0.6x`, `2=0.7x`, `3=0.8x`, `4=0.9x`, `5=1.0x` acceleration multiplier, default index 0: `0.5x`)
   - `dp_lon_gentle_brake` (Int: `0=1.5x`, `1=2.0x`, `2=2.5x` distance multiplier, default index 1: `2.0x`)
 - **Implementation**:
   - `dragonpilot/settings/min-feat.lon.gentle-accel.yaml` / `.py`

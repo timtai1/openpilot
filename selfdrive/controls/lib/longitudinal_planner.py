@@ -80,7 +80,7 @@ class LongitudinalPlanner:
     self.apm = APM()
     self.params = Params()
     self.param_read_counter = 0
-    self.accel_mult = 0.8
+    self.accel_mult = 0.5
     self.gentle_brake_mult = 2.0
     try:
       val = self.params.get("dp_lon_smooth_accel")
@@ -168,6 +168,7 @@ class LongitudinalPlanner:
       self.v_desired_filter.x = v_ego
       # Clip aEgo to cruise limits to prevent large accelerations when becoming active
       self.a_desired = np.clip(sm['carState'].aEgo, accel_clip[0], accel_clip[1])
+      self.output_a_target = self.a_desired
 
     # Prevent divergence, smooth in current v_ego
     self.v_desired_filter.x = max(0.0, self.v_desired_filter.update(v_ego))
@@ -202,7 +203,7 @@ class LongitudinalPlanner:
 
     self.mpc.set_weights(prev_accel_constraint, personality=personality)
     self.mpc.set_cur_state(self.v_desired_filter.x, self.a_desired)
-    self.mpc.cruise_max_accel = 1.6 * self.accel_mult
+    self.mpc.cruise_max_accel = get_max_accel(v_ego, self.accel_mult)
     self.mpc.update(sm['radarState'], v_cruise, personality=personality)
 
     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)
@@ -246,6 +247,15 @@ class LongitudinalPlanner:
 
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
+
+    # dp - Smooth positive acceleration roll-on (slew rate limit on throttle increases)
+    # Prevents sudden throttle stomps / transmission kickdowns when lead vehicle leaves or cruise accelerates.
+    # Scaled with accel_mult (e.g. 1.0 * accel_mult * dt). Deceleration and emergency braking are NEVER restricted.
+    if not reset_state and output_a_target > 0.0 and output_a_target > self.output_a_target:
+      max_accel_ramp_up = 1.0 * self.accel_mult * self.dt
+      prev_a = max(0.0, self.output_a_target)
+      output_a_target = min(output_a_target, prev_a + max_accel_ramp_up)
+
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])
     self.prev_accel_clip = accel_clip
 
