@@ -70,40 +70,87 @@ class TelemetryExtractor:
         if os.path.exists(cache_file):
             try:
                 with open(cache_file, "r") as f:
-                    return json.load(f)
+                    cdata = json.load(f)
+                    if cdata and cdata.get("points_count", 0) > 0 and cdata.get("duration", 0) < 300:
+                        return cdata
             except Exception:
                 pass
 
-        # Check for qlog.zst or rlog.zst
-        log_file = None
-        for name in ["qlog.zst", "rlog.zst"]:
+        if not self._init_capnp():
+            return None
+
+        # Prefer rlog.zst (full data), fallback to qlog.zst
+        log_files = []
+        for name in ["rlog.zst", "qlog.zst"]:
             candidate = os.path.join(segment_dir, name)
             if os.path.exists(candidate) and os.path.getsize(candidate) > 100:
-                log_file = candidate
-                break
+                log_files.append(candidate)
 
-        if not log_file or not self._init_capnp():
+        if not log_files:
+            return None
+
+        import zstandard as zstd
+        import io
+
+        events = []
+        for log_file in log_files:
+            try:
+                with open(log_file, "rb") as f:
+                    data = f.read()
+                dctx = zstd.ZstdDecompressor()
+                decomp = b""
+                try:
+                    with dctx.stream_reader(io.BytesIO(data)) as reader:
+                        decomp = reader.read()
+                except Exception:
+                    try:
+                        decomp = dctx.decompress(data, max_output_size=120 * 1024 * 1024)
+                    except Exception:
+                        pass
+
+                if not decomp:
+                    continue
+
+                # Parse events with truncation tolerance (sudden power off cutoffs)
+                parsed_evts = []
+                try:
+                    for evt in self._log_capnp.Event.read_multiple_bytes(decomp):
+                        parsed_evts.append(evt)
+                except Exception:
+                    # Message ends prematurely at tail - perfectly normal for abrupt shutdown
+                    pass
+
+                if any(e.which() == "carState" for e in parsed_evts):
+                    events = parsed_evts
+                    break
+                elif not events:
+                    events = parsed_evts
+            except Exception as e:
+                print(f"[Extractor] Error reading {log_file}: {e}")
+
+        if not events:
             return None
 
         try:
-            import zstandard as zstd
-            with open(log_file, "rb") as f:
-                dctx = zstd.ZstdDecompressor()
-                decomp = dctx.decompress(f.read(), max_output_size=120 * 1024 * 1024)
-
-            events = self._log_capnp.Event.read_multiple_bytes(decomp)
+            # Find first vehicle sensor event to anchor t=0
             first_mono = None
-            
+            for evt in events:
+                if evt.which() in ("carState", "controlsState", "radarState", "cameraOdometry"):
+                    first_mono = evt.logMonoTime
+                    break
+            if first_mono is None:
+                first_mono = events[0].logMonoTime
+
             # Temporary storage with downsampling (~10Hz)
             samples = {}
 
             for evt in events:
                 mono = evt.logMonoTime
-                if first_mono is None:
-                    first_mono = mono
                 t_rel = (mono - first_mono) / 1e9
-                if t_rel < 0:
+                # Discard events with negative relative time or outliers beyond 120s
+                if t_rel < -0.5 or t_rel > 120:
                     continue
+                t_rel = max(0.0, t_rel)
 
                 bucket = round(t_rel * 10) / 10.0  # 0.1s bucket
                 if bucket not in samples:
@@ -148,14 +195,12 @@ class TelemetryExtractor:
 
             for t in sorted_times:
                 s = samples[t]
-                # Carry forward or default
                 pt = {"t": t}
                 for k in ["speed", "steer", "aEgo", "gas_pressed", "brake_pressed", "brake", "vCruise", "lead_d", "lead_v", "blinker"]:
                     if k in s:
                         last_valid[k] = s[k]
                     pt[k] = last_valid[k]
-                
-                # GPS update if available
+
                 if "lat" in s:
                     pt["lat"] = s["lat"]
                     pt["lon"] = s["lon"]
@@ -183,6 +228,11 @@ class TelemetryExtractor:
                     json.dump(result, f)
             except Exception:
                 pass
+
+            return result
+        except Exception as e:
+            print(f"[Extractor] Error processing {segment_dir}: {e}")
+            return None
 
             return result
         except Exception as e:
