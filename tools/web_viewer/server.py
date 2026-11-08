@@ -366,6 +366,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 route_id = f"{parts[0]}--{parts[1]}" if len(parts) >= 3 else d
                 seg_idx = parts[2] if len(parts) >= 3 else "0"
 
+                mt = item.get("mtime", 0)
                 seg_info = {
                     "name": d,
                     "segment_idx": seg_idx,
@@ -374,13 +375,21 @@ class ViewerHandler(BaseHTTPRequestHandler):
                     "has_qcamera": any(f.startswith("qcamera") for f in files),
                     "has_log": any(f.endswith(".zst") for f in files),
                     "is_remote": True,
-                    "mtime": item.get("mtime", 0)
+                    "mtime": mt,
+                    "time_str": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mt)) if mt else "",
+                    "time_short": time.strftime('%H:%M:%S', time.localtime(mt)) if mt else ""
                 }
                 if route_id not in routes_map:
-                    routes_map[route_id] = {"route_id": route_id, "segments": [], "mtime": seg_info["mtime"]}
+                    routes_map[route_id] = {
+                        "route_id": route_id,
+                        "segments": [],
+                        "mtime": seg_info["mtime"],
+                        "date_str": seg_info["time_str"][:16]
+                    }
                 routes_map[route_id]["segments"].append(seg_info)
                 if seg_info["mtime"] > routes_map[route_id]["mtime"]:
                     routes_map[route_id]["mtime"] = seg_info["mtime"]
+                    routes_map[route_id]["date_str"] = seg_info["time_str"][:16]
 
             routes_list = list(routes_map.values())
             routes_list.sort(key=lambda r: r["mtime"], reverse=True)
@@ -415,6 +424,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
             route_id = f"{parts[0]}--{parts[1]}" if len(parts) >= 3 else d
             seg_idx = parts[2] if len(parts) >= 3 else "0"
 
+            mt = os.path.getmtime(full_sub)
             seg_info = {
                 "name": d,
                 "segment_idx": seg_idx,
@@ -424,18 +434,22 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 "has_log": "qlog.zst" in files or "rlog.zst" in files,
                 "cached_telemetry": ".telemetry.json" in files,
                 "is_remote": False,
-                "mtime": os.path.getmtime(full_sub)
+                "mtime": mt,
+                "time_str": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mt)) if mt else "",
+                "time_short": time.strftime('%H:%M:%S', time.localtime(mt)) if mt else ""
             }
 
             if route_id not in routes_map:
                 routes_map[route_id] = {
                     "route_id": route_id,
                     "segments": [],
-                    "mtime": seg_info["mtime"]
+                    "mtime": seg_info["mtime"],
+                    "date_str": seg_info["time_str"][:16]
                 }
             routes_map[route_id]["segments"].append(seg_info)
             if seg_info["mtime"] > routes_map[route_id]["mtime"]:
                 routes_map[route_id]["mtime"] = seg_info["mtime"]
+                routes_map[route_id]["date_str"] = seg_info["time_str"][:16]
 
         routes_list = list(routes_map.values())
         routes_list.sort(key=lambda r: r["mtime"], reverse=True)

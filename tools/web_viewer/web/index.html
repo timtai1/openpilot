@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Openpilot / Dragonpilot Drive Viewer</title>
-  <!-- Leaflet Map CSS -->
+  <!-- Leaflet Map CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
@@ -92,7 +92,6 @@
       align-items: center;
       gap: 5px;
     }
-
     .path-bar {
       display: flex;
       align-items: center;
@@ -108,7 +107,7 @@
       background: transparent;
       border: none;
       color: var(--text);
-      width: 320px;
+      width: 300px;
       font-family: monospace;
       outline: none;
     }
@@ -136,7 +135,7 @@
 
     /* Sidebar / Route Explorer */
     aside {
-      width: 320px;
+      width: 330px;
       background: #12151e;
       border-right: 1px solid var(--border-color);
       display: flex;
@@ -144,7 +143,7 @@
       flex-shrink: 0;
     }
     .search-box {
-      padding: 12px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--border-color);
     }
     .search-box input {
@@ -152,11 +151,34 @@
       background: #0a0c12;
       border: 1px solid var(--border-color);
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 7px 12px;
       color: var(--text);
       font-size: 0.85rem;
       outline: none;
     }
+    .sidebar-sort-bar {
+      padding: 6px 12px;
+      background: #0d1017;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sort-btn {
+      background: #161a25;
+      border: 1px solid var(--border-color);
+      color: var(--text);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s;
+    }
+    .sort-btn:hover { background: #202738; border-color: var(--accent); }
     .routes-list {
       flex: 1;
       overflow-y: auto;
@@ -170,13 +192,14 @@
       font-weight: 700;
       color: var(--text-muted);
       padding: 6px 8px;
-      text-transform: uppercase;
       letter-spacing: 0.5px;
       display: flex;
       justify-content: space-between;
+      border-bottom: 1px solid #1c202d;
+      margin-bottom: 4px;
     }
     .seg-item {
-      padding: 8px 10px;
+      padding: 7px 10px;
       background: var(--card-bg);
       border: 1px solid transparent;
       border-radius: 6px;
@@ -205,18 +228,25 @@
     .badge-video { background: #064e3b; color: #34d399; }
     .badge-log { background: #1e3a8a; color: #60a5fa; }
 
-    /* Content Area */
+    /* Content Area with Vertical Split */
     .content-area {
       flex: 1;
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
-      padding: 16px;
-      gap: 16px;
+      overflow: hidden;
+      padding: 10px;
+      gap: 0;
     }
 
-    /* Video Player & HUD */
+    /* Top: Video Player Card */
+    .split-top {
+      flex: 1;
+      min-height: 240px;
+      display: flex;
+      flex-direction: column;
+    }
     .player-card {
+      height: 100%;
       background: var(--card-bg);
       border-radius: 10px;
       border: 1px solid var(--border-color);
@@ -231,6 +261,7 @@
       align-items: center;
       justify-content: space-between;
       border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
     }
     .cam-tabs { display: flex; gap: 6px; }
     .cam-tab {
@@ -244,14 +275,16 @@
       font-weight: 600;
     }
     .cam-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
     .video-viewport {
       position: relative;
       background: #000;
       width: 100%;
-      height: 480px;
+      flex: 1;
       display: flex;
       justify-content: center;
       align-items: center;
+      overflow: hidden;
     }
     video {
       width: 100%;
@@ -348,10 +381,7 @@
       gap: 8px;
     }
     .lead-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
-    .pedals-box {
-      display: flex;
-      gap: 10px;
-    }
+    .pedals-box { display: flex; gap: 10px; }
     .pedal-bar-wrap {
       background: rgba(15, 23, 42, 0.75);
       border-radius: 6px;
@@ -381,65 +411,120 @@
     .brake-fill { background: var(--red); }
     .pedal-label { font-size: 0.65rem; font-weight: 800; color: var(--text-muted); }
 
-    /* Telemetry Controls & Selectors */
+    /* Draggable Horizontal Splitter */
+    .horizontal-splitter {
+      height: 12px;
+      background: transparent;
+      cursor: row-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 4px 0;
+      z-index: 10;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .horizontal-splitter:hover, .horizontal-splitter.dragging {
+      background: rgba(59, 130, 246, 0.25);
+    }
+    .splitter-bar {
+      width: 50px;
+      height: 4px;
+      border-radius: 2px;
+      background: #374151;
+      transition: background 0.15s, width 0.15s;
+    }
+    .horizontal-splitter:hover .splitter-bar, .horizontal-splitter.dragging .splitter-bar {
+      background: var(--accent);
+      width: 80px;
+    }
+
+    /* Bottom: Map + Telemetry Card Layout */
+    .split-bottom {
+      height: 290px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .bottom-container {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 12px;
+      height: 100%;
+    }
+
+    /* Map Card */
+    .map-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .pane-header {
+      padding: 7px 12px;
+      background: #141721;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    #map { flex: 1; width: 100%; height: 100%; }
+
+    /* Telemetry Card on Right */
     .telemetry-card {
       background: var(--card-bg);
       border-radius: 10px;
       border: 1px solid var(--border-color);
-      padding: 16px;
+      padding: 10px 14px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
+      height: 100%;
     }
     .card-title-bar {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
     .card-title {
-      font-size: 1rem;
+      font-size: 0.85rem;
       font-weight: 700;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
-    .filter-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .chip {
       background: #131722;
       border: 1px solid var(--border-color);
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 0.8rem;
+      padding: 3px 8px;
+      border-radius: 16px;
+      font-size: 0.75rem;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       color: var(--text-muted);
       user-select: none;
       transition: all 0.15s;
     }
-    .chip.active {
-      background: #1e293b;
-      border-color: var(--accent);
-      color: #fff;
-    }
-    .chip-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-    }
+    .chip.active { background: #1e293b; border-color: var(--accent); color: #fff; }
+    .chip-dot { width: 7px; height: 7px; border-radius: 50%; }
 
     /* Canvas Chart */
     .chart-wrapper {
       position: relative;
       width: 100%;
-      height: 180px;
+      flex: 1;
+      min-height: 110px;
       background: #0c0e15;
-      border-radius: 8px;
+      border-radius: 6px;
       border: 1px solid var(--border-color);
       overflow: hidden;
       cursor: crosshair;
@@ -451,55 +536,38 @@
     }
     .chart-tooltip {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: 6px;
+      left: 8px;
       background: rgba(15, 23, 42, 0.9);
       border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 0.75rem;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.7rem;
       font-family: monospace;
       pointer-events: none;
       display: none;
     }
 
-    /* Map & Metrics Grid */
-    .bottom-grid {
+    /* Bottom Instantaneous Metrics Row */
+    .metrics-row {
       display: grid;
-      grid-template-columns: 1fr 340px;
-      gap: 16px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      flex-shrink: 0;
+      margin-top: 2px;
     }
-    .map-card {
-      background: var(--card-bg);
-      border-radius: 10px;
-      border: 1px solid var(--border-color);
-      height: 260px;
-      overflow: hidden;
-      position: relative;
-    }
-    #map { width: 100%; height: 100%; }
-
-    .metrics-summary {
-      background: var(--card-bg);
-      border-radius: 10px;
-      border: 1px solid var(--border-color);
-      padding: 14px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    .metric-tile {
+    .metric-pill {
       background: #11141d;
       border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px;
+      border-radius: 6px;
+      padding: 5px 10px;
       display: flex;
-      flex-direction: column;
-      justify-content: center;
+      justify-content: space-between;
+      align-items: center;
     }
-    .metric-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
-    .metric-val { font-size: 1.3rem; font-weight: 800; font-family: monospace; color: #fff; margin-top: 2px; }
+    .pill-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 700; }
+    .pill-val { font-size: 0.95rem; font-weight: 800; font-family: monospace; color: #fff; }
+    .pill-val small { font-size: 0.65rem; color: #9ca3af; }
   </style>
 </head>
 <body>
@@ -538,7 +606,13 @@
     <!-- Sidebar -->
     <aside>
       <div class="search-box">
-        <input type="text" id="searchInput" placeholder="🔍 搜尋路段或日期..." oninput="filterRoutes()" />
+        <input type="text" id="searchInput" placeholder="🔍 搜尋日期或路段..." oninput="filterRoutes()" />
+      </div>
+      <div class="sidebar-sort-bar">
+        <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">排序方式:</span>
+        <button class="sort-btn" id="sortToggleBtn" onclick="toggleSortOrder()">
+          <span id="sortIcon">⬇️</span> <span id="sortText">最新在前 (新 → 舊)</span>
+        </button>
       </div>
       <div class="routes-list" id="routesList">
         <div style="padding: 20px; text-align: center; color: var(--text-muted);">正在載入路段...</div>
@@ -547,60 +621,62 @@
 
     <!-- Content Area -->
     <main class="content-area">
-      <!-- Player Card -->
-      <div class="player-card">
-        <div class="player-toolbar">
-          <div class="cam-tabs">
-            <button class="cam-tab active" onclick="switchCamera('fcamera')">🚗 前方鏡頭 (Road)</button>
-            <button class="cam-tab" onclick="switchCamera('ecamera')">📐 廣角鏡頭 (Wide)</button>
-            <button class="cam-tab" onclick="switchCamera('qcamera')">⚡ 預覽 (Quick)</button>
-          </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-              <input type="checkbox" id="hudToggle" checked onchange="toggleHud()" /> HUD 儀表疊加
-            </label>
-            <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 8px;">
-              <input type="checkbox" id="autoNext" checked /> 自動播放下段
-            </label>
-          </div>
-        </div>
-
-        <div class="video-viewport">
-          <video id="videoPlayer" controls autoplay playsinline></video>
-
-          <!-- Cockpit HUD Overlay -->
-          <div class="hud-overlay" id="hudOverlay">
-            <div class="hud-top">
-              <div class="speedo-box">
-                <span class="speedo-val" id="hudSpeed">0</span>
-                <span class="speedo-unit">KM/H</span>
-                <span class="cruise-badge" id="hudCruise" style="display:none;">CRUISE 0</span>
-              </div>
-              <div class="steering-box">
-                <svg class="wheel-icon" id="hudWheel" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="8" fill="none"/>
-                  <circle cx="50" cy="50" r="14" fill="#3b82f6"/>
-                  <line x1="50" y1="50" x2="50" y2="8" stroke="#60a5fa" stroke-width="6"/>
-                  <line x1="50" y1="50" x2="14" y2="68" stroke="#60a5fa" stroke-width="6"/>
-                  <line x1="50" y1="50" x2="86" y2="68" stroke="#60a5fa" stroke-width="6"/>
-                </svg>
-                <span class="steer-deg" id="hudSteer">0.0°</span>
-              </div>
+      <!-- Top Split: Player Card -->
+      <div class="split-top" id="splitTop">
+        <div class="player-card">
+          <div class="player-toolbar">
+            <div class="cam-tabs">
+              <button class="cam-tab active" onclick="switchCamera('fcamera')">🚗 前方鏡頭 (Road)</button>
+              <button class="cam-tab" onclick="switchCamera('ecamera')">📐 廣角鏡頭 (Wide)</button>
+              <button class="cam-tab" onclick="switchCamera('qcamera')">⚡ 預覽 (Quick)</button>
             </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" id="hudToggle" checked onchange="toggleHud()" /> HUD 儀表疊加
+              </label>
+              <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 8px;">
+                <input type="checkbox" id="autoNext" checked /> 自動播放下段
+              </label>
+            </div>
+          </div>
 
-            <div class="hud-bottom">
-              <div class="lead-badge" id="hudLead" style="display: none;">
-                <div class="lead-dot" id="leadDot"></div>
-                <span>前車距離: <strong id="hudLeadDist">--</strong> m</span>
-              </div>
-              <div class="pedals-box">
-                <div class="pedal-bar-wrap">
-                  <div class="pedal-meter"><div class="pedal-fill brake-fill" id="hudBrakeFill"></div></div>
-                  <span class="pedal-label">BRAKE</span>
+          <div class="video-viewport">
+            <video id="videoPlayer" controls autoplay playsinline></video>
+
+            <!-- Cockpit HUD Overlay -->
+            <div class="hud-overlay" id="hudOverlay">
+              <div class="hud-top">
+                <div class="speedo-box">
+                  <span class="speedo-val" id="hudSpeed">0</span>
+                  <span class="speedo-unit">KM/H</span>
+                  <span class="cruise-badge" id="hudCruise" style="display:none;">CRUISE 0</span>
                 </div>
-                <div class="pedal-bar-wrap">
-                  <div class="pedal-meter"><div class="pedal-fill gas-fill" id="hudGasFill"></div></div>
-                  <span class="pedal-label">GAS</span>
+                <div class="steering-box">
+                  <svg class="wheel-icon" id="hudWheel" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="8" fill="none"/>
+                    <circle cx="50" cy="50" r="14" fill="#3b82f6"/>
+                    <line x1="50" y1="50" x2="50" y2="8" stroke="#60a5fa" stroke-width="6"/>
+                    <line x1="50" y1="50" x2="14" y2="68" stroke="#60a5fa" stroke-width="6"/>
+                    <line x1="50" y1="50" x2="86" y2="68" stroke="#60a5fa" stroke-width="6"/>
+                  </svg>
+                  <span class="steer-deg" id="hudSteer">0.0°</span>
+                </div>
+              </div>
+
+              <div class="hud-bottom">
+                <div class="lead-badge" id="hudLead" style="display: none;">
+                  <div class="lead-dot" id="leadDot"></div>
+                  <span>前車距離: <strong id="hudLeadDist">--</strong> m</span>
+                </div>
+                <div class="pedals-box">
+                  <div class="pedal-bar-wrap">
+                    <div class="pedal-meter"><div class="pedal-fill brake-fill" id="hudBrakeFill"></div></div>
+                    <span class="pedal-label">BRAKE</span>
+                  </div>
+                  <div class="pedal-bar-wrap">
+                    <div class="pedal-meter"><div class="pedal-fill gas-fill" id="hudGasFill"></div></div>
+                    <span class="pedal-label">GAS</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -608,58 +684,71 @@
         </div>
       </div>
 
-      <!-- Telemetry Dashboard -->
-      <div class="telemetry-card">
-        <div class="card-title-bar">
-          <div class="card-title">
-            <span>📈 行車遙測數據同步時間軸 (點選圖表跳轉)</span>
-          </div>
-          <div class="filter-chips">
-            <div class="chip active" data-metric="speed" onclick="toggleMetric(this)">
-              <div class="chip-dot" style="background: #3b82f6;"></div>車速 (Speed)
-            </div>
-            <div class="chip active" data-metric="steer" onclick="toggleMetric(this)">
-              <div class="chip-dot" style="background: #a855f7;"></div>方向盤 (Steer)
-            </div>
-            <div class="chip active" data-metric="accel" onclick="toggleMetric(this)">
-              <div class="chip-dot" style="background: #10b981;"></div>加減速 (Accel)
-            </div>
-            <div class="chip" data-metric="brake" onclick="toggleMetric(this)">
-              <div class="chip-dot" style="background: #ef4444;"></div>煞車 (Brake)
-            </div>
-            <div class="chip" data-metric="lead" onclick="toggleMetric(this)">
-              <div class="chip-dot" style="background: #f59e0b;"></div>前車距離 (Lead)
-            </div>
-          </div>
-        </div>
-
-        <div class="chart-wrapper" id="chartWrapper">
-          <canvas id="chartCanvas"></canvas>
-          <div class="chart-tooltip" id="chartTooltip"></div>
-        </div>
+      <!-- Draggable Horizontal Splitter -->
+      <div class="horizontal-splitter" id="splitter">
+        <div class="splitter-bar"></div>
       </div>
 
-      <!-- Bottom Map & Stats -->
-      <div class="bottom-grid">
-        <div class="map-card">
-          <div id="map"></div>
-        </div>
-        <div class="metrics-summary">
-          <div class="metric-tile">
-            <span class="metric-label">即時車速</span>
-            <span class="metric-val" id="statSpeed">0 <small style="font-size:0.8rem;color:#9ca3af;">km/h</small></span>
+      <!-- Bottom Split: Map (Left) + Telemetry & Chart (Right) -->
+      <div class="split-bottom" id="splitBottom">
+        <div class="bottom-container">
+          <!-- Left: Map -->
+          <div class="map-card">
+            <div class="pane-header">
+              <span>🗺️ GPS 行車動態軌跡</span>
+            </div>
+            <div id="map"></div>
           </div>
-          <div class="metric-tile">
-            <span class="metric-label">方向盤轉角</span>
-            <span class="metric-val" id="statSteer">0.0 <small style="font-size:0.8rem;color:#9ca3af;">deg</small></span>
-          </div>
-          <div class="metric-tile">
-            <span class="metric-label">加速度</span>
-            <span class="metric-val" id="statAccel">0.00 <small style="font-size:0.8rem;color:#9ca3af;">m/s²</small></span>
-          </div>
-          <div class="metric-tile">
-            <span class="metric-label">前車距離</span>
-            <span class="metric-val" id="statLead">-- <small style="font-size:0.8rem;color:#9ca3af;">m</small></span>
+
+          <!-- Right: Telemetry & Chart -->
+          <div class="telemetry-card">
+            <div class="card-title-bar">
+              <div class="card-title">
+                <span>📈 遙測數據同步時間軸 (點選圖表跳轉)</span>
+              </div>
+              <div class="filter-chips">
+                <div class="chip active" data-metric="speed" onclick="toggleMetric(this)">
+                  <div class="chip-dot" style="background: #3b82f6;"></div>車速
+                </div>
+                <div class="chip active" data-metric="steer" onclick="toggleMetric(this)">
+                  <div class="chip-dot" style="background: #a855f7;"></div>方向盤
+                </div>
+                <div class="chip active" data-metric="accel" onclick="toggleMetric(this)">
+                  <div class="chip-dot" style="background: #10b981;"></div>加減速
+                </div>
+                <div class="chip" data-metric="brake" onclick="toggleMetric(this)">
+                  <div class="chip-dot" style="background: #ef4444;"></div>煞車
+                </div>
+                <div class="chip" data-metric="lead" onclick="toggleMetric(this)">
+                  <div class="chip-dot" style="background: #f59e0b;"></div>前車
+                </div>
+              </div>
+            </div>
+
+            <div class="chart-wrapper" id="chartWrapper">
+              <canvas id="chartCanvas"></canvas>
+              <div class="chart-tooltip" id="chartTooltip"></div>
+            </div>
+
+            <!-- Instantaneous Metrics Row -->
+            <div class="metrics-row">
+              <div class="metric-pill">
+                <span class="pill-label">車速</span>
+                <span class="pill-val" id="statSpeed">0 <small>km/h</small></span>
+              </div>
+              <div class="metric-pill">
+                <span class="pill-label">方向盤</span>
+                <span class="pill-val" id="statSteer">0.0 <small>deg</small></span>
+              </div>
+              <div class="metric-pill">
+                <span class="pill-label">加減速</span>
+                <span class="pill-val" id="statAccel">0.00 <small>m/s²</small></span>
+              </div>
+              <div class="metric-pill">
+                <span class="pill-label">前車距離</span>
+                <span class="pill-val" id="statLead">-- <small>m</small></span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -675,6 +764,7 @@
     let map = null;
     let carMarker = null;
     let pathPolyline = null;
+    let sortOrder = 'desc'; // 'desc' = newest first, 'asc' = oldest first
 
     // Load saved IP
     const savedIp = localStorage.getItem('comma_ip') || '';
@@ -718,6 +808,13 @@
         statusEl.innerHTML = `🔴 錯誤`;
         statusEl.style.color = '#f87171';
       }
+    }
+
+    function toggleSortOrder() {
+      sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+      document.getElementById('sortIcon').innerText = sortOrder === 'desc' ? '⬇️' : '⬆️';
+      document.getElementById('sortText').innerText = sortOrder === 'desc' ? '最新在前 (新 → 舊)' : '最舊在前 (舊 → 新)';
+      renderRoutesList();
     }
 
     const activeMetrics = {
@@ -790,17 +887,25 @@
         return;
       }
 
+      // Sort routes by time
+      const sorted = [...list];
+      sorted.sort((a, b) => {
+        return sortOrder === 'desc' ? (b.mtime - a.mtime) : (a.mtime - b.mtime);
+      });
+
       let html = '';
-      list.forEach(r => {
+      sorted.forEach(r => {
+        const headerTitle = r.date_str ? `📅 ${r.date_str}` : `Route: ${r.route_id}`;
         html += `<div class="route-group">
           <div class="route-header">
-            <span>${r.route_id}</span>
-            <span>${r.segments.length} Segs</span>
+            <span>${headerTitle}</span>
+            <span>${r.segments.length} 段</span>
           </div>`;
         r.segments.forEach(s => {
           const isActive = currentSegment === s.name ? 'active' : '';
+          const timeLabel = s.time_short ? ` · ${s.time_short}` : '';
           html += `<div class="seg-item ${isActive}" onclick="selectSegment('${s.name}')">
-            <span class="seg-name">Seg #${s.segment_idx}</span>
+            <span class="seg-name">第 #${s.segment_idx} 段${timeLabel}</span>
             <div class="seg-tags">
               ${s.has_fcamera ? '<span class="badge badge-video">CAM</span>' : ''}
               ${s.has_log ? '<span class="badge badge-log">LOG</span>' : ''}
@@ -817,8 +922,8 @@
       if (!q) { renderRoutesList(); return; }
       const filtered = [];
       currentRoutes.forEach(r => {
-        const segs = r.segments.filter(s => s.name.toLowerCase().includes(q) || s.segment_idx.includes(q));
-        if (segs.length > 0 || r.route_id.toLowerCase().includes(q)) {
+        const segs = r.segments.filter(s => s.name.toLowerCase().includes(q) || s.segment_idx.includes(q) || (s.time_str && s.time_str.toLowerCase().includes(q)));
+        if (segs.length > 0 || r.route_id.toLowerCase().includes(q) || (r.date_str && r.date_str.toLowerCase().includes(q))) {
           filtered.push({ ...r, segments: segs.length > 0 ? segs : r.segments });
         }
       });
@@ -871,6 +976,50 @@
       drawChart();
     }
 
+    // Draggable Splitter Implementation
+    const splitter = document.getElementById('splitter');
+    const splitTop = document.getElementById('splitTop');
+    const splitBottom = document.getElementById('splitBottom');
+    let isDragging = false;
+
+    splitter.addEventListener('mousedown', e => {
+      isDragging = true;
+      splitter.classList.add('dragging');
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      const containerRect = document.querySelector('.content-area').getBoundingClientRect();
+      const newTopHeight = e.clientY - containerRect.top - 6;
+      if (newTopHeight >= 200 && newTopHeight <= containerRect.height - 160) {
+        splitTop.style.flex = 'none';
+        splitTop.style.height = `${newTopHeight}px`;
+        localStorage.setItem('viewer_top_height', newTopHeight);
+        if (map) map.invalidateSize();
+        drawChart();
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        splitter.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        if (map) map.invalidateSize();
+        drawChart();
+      }
+    });
+
+    // Restore saved height
+    const savedHeight = localStorage.getItem('viewer_top_height');
+    if (savedHeight) {
+      splitTop.style.flex = 'none';
+      splitTop.style.height = `${savedHeight}px`;
+    }
+
     // Synchronized Video Playback Update
     video.addEventListener('timeupdate', () => {
       const curT = video.currentTime;
@@ -905,15 +1054,15 @@
 
       // HUD & Metric updates
       document.getElementById('hudSpeed').innerText = Math.round(pt.speed || 0);
-      document.getElementById('statSpeed').innerHTML = `${Math.round(pt.speed || 0)} <small style="font-size:0.8rem;color:#9ca3af;">km/h</small>`;
+      document.getElementById('statSpeed').innerHTML = `${Math.round(pt.speed || 0)} <small>km/h</small>`;
 
       const steer = (pt.steer || 0).toFixed(1);
       document.getElementById('hudSteer').innerText = `${steer}°`;
-      document.getElementById('statSteer').innerHTML = `${steer} <small style="font-size:0.8rem;color:#9ca3af;">deg</small>`;
+      document.getElementById('statSteer').innerHTML = `${steer} <small>deg</small>`;
       document.getElementById('hudWheel').style.transform = `rotate(${steer}deg)`;
 
       const accel = (pt.aEgo || 0).toFixed(2);
-      document.getElementById('statAccel').innerHTML = `${accel} <small style="font-size:0.8rem;color:#9ca3af;">m/s²</small>`;
+      document.getElementById('statAccel').innerHTML = `${accel} <small>m/s²</small>`;
 
       // Pedals
       document.getElementById('hudBrakeFill').style.height = `${Math.min(100, (pt.brake || (pt.brake_pressed ? 100 : 0)))}%`;
@@ -924,14 +1073,14 @@
       if (pt.lead_d != null) {
         hudLead.style.display = 'flex';
         document.getElementById('hudLeadDist').innerText = pt.lead_d.toFixed(1);
-        document.getElementById('statLead').innerHTML = `${pt.lead_d.toFixed(1)} <small style="font-size:0.8rem;color:#9ca3af;">m</small>`;
+        document.getElementById('statLead').innerHTML = `${pt.lead_d.toFixed(1)} <small>m</small>`;
         const leadDot = document.getElementById('leadDot');
         if (pt.lead_d < 15) leadDot.style.background = '#ef4444';
         else if (pt.lead_d < 30) leadDot.style.background = '#f59e0b';
         else leadDot.style.background = '#10b981';
       } else {
         hudLead.style.display = 'none';
-        document.getElementById('statLead').innerHTML = `-- <small style="font-size:0.8rem;color:#9ca3af;">m</small>`;
+        document.getElementById('statLead').innerHTML = `-- <small>m</small>`;
       }
 
       // GPS Marker on Map
@@ -952,7 +1101,7 @@
       if (pathPolyline) map.removeLayer(pathPolyline);
       if (pts.length > 0) {
         pathPolyline = L.polyline(pts, { color: '#3b82f6', weight: 4, opacity: 0.8 }).addTo(map);
-        map.fitBounds(pathPolyline.getBounds(), { padding: [20, 20] });
+        map.fitBounds(pathPolyline.getBounds(), { padding: [15, 15] });
         carMarker.setLatLng(pts[0]);
       }
     }
@@ -962,6 +1111,7 @@
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
+      if (!canvas.parentElement) return;
       canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
       canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
@@ -970,6 +1120,7 @@
 
     function drawChart() {
       resizeCanvas();
+      if (!canvas.parentElement) return;
       const w = canvas.parentElement.clientWidth;
       const h = canvas.parentElement.clientHeight;
       ctx.clearRect(0, 0, w, h);
@@ -981,8 +1132,8 @@
       // Draw Grid
       ctx.strokeStyle = '#1e2433';
       ctx.lineWidth = 1;
-      for (let i = 0; i <= 4; i++) {
-        const y = (h / 4) * i;
+      for (let i = 0; i <= 3; i++) {
+        const y = (h / 3) * i;
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(w, y);
@@ -999,7 +1150,7 @@
         ctx.beginPath();
         data.forEach((p, idx) => {
           const x = getX(p.t);
-          const y = h - ((p.speed || 0) / 140) * (h - 20) - 10;
+          const y = h - ((p.speed || 0) / 140) * (h - 16) - 8;
           if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         });
         ctx.stroke();
@@ -1012,7 +1163,7 @@
         ctx.beginPath();
         data.forEach((p, idx) => {
           const x = getX(p.t);
-          const y = (h / 2) - ((p.steer || 0) / 180) * (h / 2 - 10);
+          const y = (h / 2) - ((p.steer || 0) / 180) * (h / 2 - 8);
           if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         });
         ctx.stroke();
@@ -1025,7 +1176,7 @@
         ctx.beginPath();
         data.forEach((p, idx) => {
           const x = getX(p.t);
-          const y = (h / 2) - ((p.aEgo || 0) / 4) * (h / 2 - 10);
+          const y = (h / 2) - ((p.aEgo || 0) / 4) * (h / 2 - 8);
           if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         });
         ctx.stroke();
@@ -1039,7 +1190,7 @@
         data.forEach((p, idx) => {
           if (p.lead_d != null) {
             const x = getX(p.t);
-            const y = h - (p.lead_d / 100) * (h - 20) - 10;
+            const y = h - (p.lead_d / 100) * (h - 16) - 8;
             if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
           }
         });
@@ -1052,10 +1203,8 @@
     function drawChartCursor(t) {
       if (!telemetryData || !telemetryData.duration) return;
       const w = canvas.parentElement.clientWidth;
-      const h = canvas.parentElement.clientHeight;
       const x = (t / telemetryData.duration) * w;
 
-      // Draw cursor without clearing entire chart
       const el = document.getElementById('chartWrapper');
       let cursor = document.getElementById('scrubberLine');
       if (!cursor) {
