@@ -5,7 +5,7 @@ import threading
 from openpilot.system.hardware.hw import Paths
 from openpilot.common.swaglog import cloudlog
 from openpilot.system.loggerd.config import get_available_bytes, get_available_percent
-from openpilot.system.loggerd.uploader import listdir_by_creation
+from openpilot.system.loggerd.uploader import listdir_by_creation, clear_locks
 from openpilot.system.loggerd.xattr_cache import getxattr
 
 MIN_BYTES = 5 * 1024 * 1024 * 1024
@@ -46,6 +46,12 @@ def get_preserved_segments(dirs_by_creation: list[str]) -> set[str]:
 
 
 def deleter_thread(exit_event: threading.Event):
+  # Clear orphaned locks from interrupted drives on boot/start (independent of uploader)
+  try:
+    clear_locks(Paths.log_root())
+  except Exception:
+    cloudlog.exception("deleter failed to clear locks on startup")
+
   while not exit_event.is_set():
     out_of_bytes = get_available_bytes(default=MIN_BYTES + 1) < MIN_BYTES
     out_of_percent = get_available_percent(default=MIN_PERCENT + 1) < MIN_PERCENT
@@ -54,20 +60,36 @@ def deleter_thread(exit_event: threading.Event):
       dirs = listdir_by_creation(Paths.log_root())
       preserved_dirs = get_preserved_segments(dirs)
 
+      deleted = False
       # remove the earliest directory we can
       for delete_dir in sorted(dirs, key=lambda d: (d in DELETE_LAST, d in preserved_dirs)):
         delete_path = os.path.join(Paths.log_root(), delete_dir)
 
         if any(name.endswith(".lock") for name in os.listdir(delete_path)):
-          continue
+          # If not the most recent directory, any lock file inside is an orphaned lock from an interrupted trip
+          if dirs and delete_dir != dirs[-1]:
+            try:
+              for name in os.listdir(delete_path):
+                if name.endswith(".lock"):
+                  os.unlink(os.path.join(delete_path, name))
+            except OSError:
+              continue
+          else:
+            continue
 
         try:
           cloudlog.info(f"deleting {delete_path}")
           shutil.rmtree(delete_path)
+          deleted = True
           break
         except OSError:
           cloudlog.exception(f"issue deleting {delete_path}")
-      exit_event.wait(.1)
+
+      if not deleted:
+        # Avoid 0.1s spin loop if locked directory cannot be deleted
+        exit_event.wait(5)
+      else:
+        exit_event.wait(.1)
     else:
       exit_event.wait(30)
 
