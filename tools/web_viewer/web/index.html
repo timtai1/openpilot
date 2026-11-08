@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Openpilot / Dragonpilot Drive Viewer</title>
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg-dark: #0f1117;
+      --card-bg: #1a1d27;
+      --border-color: #2a2e3d;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.3);
+      --green: #10b981;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Top Navigation */
+    header {
+      background: #141721;
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      flex-shrink: 0;
+    }
+    .logo-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.5px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      color: #fff;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+    .source-selector {
+      display: flex;
+      background: #0b0d13;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .source-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .source-tab.active {
+      background: #1e293b;
+      color: #fff;
+    }
+    .status-indicator {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #11141d;
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .path-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #0b0d13;
+      padding: 4px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .path-input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      width: 320px;
+      font-family: monospace;
+      outline: none;
+    }
+    .btn {
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border-color);
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: #262b3a; border-color: var(--accent); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn-primary:hover { background: #2563eb; }
+
+    /* Main Container */
+    .main-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar / Route Explorer */
+    aside {
+      width: 320px;
+      background: #12151e;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .search-box {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .search-box input {
+      width: 100%;
+      background: #0a0c12;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .routes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .route-group {
+      margin-bottom: 12px;
+    }
+    .route-header {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      padding: 6px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .seg-item {
+      padding: 8px 10px;
+      background: var(--card-bg);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+    .seg-item:hover { background: #222634; border-color: #3b4256; }
+    .seg-item.active {
+      background: #1e293b;
+      border-color: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .seg-name { font-weight: 600; font-family: monospace; }
+    .seg-tags { display: flex; gap: 4px; }
+    .badge {
+      font-size: 0.65rem;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .badge-video { background: #064e3b; color: #34d399; }
+    .badge-log { background: #1e3a8a; color: #60a5fa; }
+
+    /* Content Area */
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 16px;
+      gap: 16px;
+    }
+
+    /* Video Player & HUD */
+    .player-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .player-toolbar {
+      padding: 8px 16px;
+      background: #141721;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .cam-tabs { display: flex; gap: 6px; }
+    .cam-tab {
+      background: #0f1118;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .cam-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .video-viewport {
+      position: relative;
+      background: #000;
+      width: 100%;
+      height: 480px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    /* In-Video HUD Cockpit Overlay */
+    .hud-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+      transition: opacity 0.2s;
+    }
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .speedo-box {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 10px 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .speedo-val {
+      font-size: 2.8rem;
+      font-weight: 900;
+      font-family: monospace;
+      line-height: 1;
+      color: #fff;
+    }
+    .speedo-unit {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .cruise-badge {
+      margin-top: 4px;
+      background: #065f46;
+      color: #6ee7b7;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .steering-box {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .wheel-icon {
+      width: 48px;
+      height: 48px;
+      transition: transform 0.05s linear;
+    }
+    .steer-deg {
+      font-size: 0.9rem;
+      font-weight: 700;
+      font-family: monospace;
+      color: #93c5fd;
+    }
+
+    .hud-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .lead-badge {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .lead-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+    .pedals-box {
+      display: flex;
+      gap: 10px;
+    }
+    .pedal-bar-wrap {
+      background: rgba(15, 23, 42, 0.75);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .pedal-meter {
+      width: 14px;
+      height: 50px;
+      background: #1e293b;
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+    }
+    .pedal-fill {
+      width: 100%;
+      height: 0%;
+      transition: height 0.05s;
+    }
+    .gas-fill { background: var(--green); }
+    .brake-fill { background: var(--red); }
+    .pedal-label { font-size: 0.65rem; font-weight: 800; color: var(--text-muted); }
+
+    /* Telemetry Controls & Selectors */
+    .telemetry-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .card-title-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      background: #131722;
+      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      user-select: none;
+      transition: all 0.15s;
+    }
+    .chip.active {
+      background: #1e293b;
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .chip-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* Canvas Chart */
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      background: #0c0e15;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+      cursor: crosshair;
+    }
+    canvas#chartCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .chart-tooltip {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.75rem;
+      font-family: monospace;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* Map & Metrics Grid */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .map-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      height: 260px;
+      overflow: hidden;
+      position: relative;
+    }
+    #map { width: 100%; height: 100%; }
+
+    .metrics-summary {
+      background: var(--card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .metric-tile {
+      background: #11141d;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .metric-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+    .metric-val { font-size: 1.3rem; font-weight: 800; font-family: monospace; color: #fff; margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo-box">
+      <span>🚘 Openpilot Drive Viewer</span>
+      <span class="logo-badge">LOCAL WEB</span>
+    </div>
+
+    <!-- Source Selector & Connection Bar -->
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div class="source-selector">
+        <button class="source-tab active" id="srcLocalBtn" onclick="setSource('local')">📁 本機目錄</button>
+        <button class="source-tab" id="srcRemoteBtn" onclick="setSource('remote')">📡 Comma 裝置</button>
+      </div>
+
+      <div class="path-bar" id="localBar">
+        <span>目錄:</span>
+        <input type="text" id="pathInput" class="path-input" value="~/Downloads/comma_realdata" />
+        <button class="btn btn-primary" onclick="loadRoutes()">載入</button>
+      </div>
+
+      <div class="path-bar" id="remoteBar" style="display:none;">
+        <span>機子 IP:</span>
+        <input type="text" id="ipInput" class="path-input" style="width:130px;" placeholder="192.168.x.x" />
+        <button class="btn btn-primary" onclick="connectDevice()">連線</button>
+        <div class="status-indicator" id="deviceStatus">⚪ 未連線</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="main-layout">
+    <!-- Sidebar -->
+    <aside>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="🔍 搜尋路段或日期..." oninput="filterRoutes()" />
+      </div>
+      <div class="routes-list" id="routesList">
+        <div style="padding: 20px; text-align: center; color: var(--text-muted);">正在載入路段...</div>
+      </div>
+    </aside>
+
+    <!-- Content Area -->
+    <main class="content-area">
+      <!-- Player Card -->
+      <div class="player-card">
+        <div class="player-toolbar">
+          <div class="cam-tabs">
+            <button class="cam-tab active" onclick="switchCamera('fcamera')">🚗 前方鏡頭 (Road)</button>
+            <button class="cam-tab" onclick="switchCamera('ecamera')">📐 廣角鏡頭 (Wide)</button>
+            <button class="cam-tab" onclick="switchCamera('qcamera')">⚡ 預覽 (Quick)</button>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="hudToggle" checked onchange="toggleHud()" /> HUD 儀表疊加
+            </label>
+            <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 8px;">
+              <input type="checkbox" id="autoNext" checked /> 自動播放下段
+            </label>
+          </div>
+        </div>
+
+        <div class="video-viewport">
+          <video id="videoPlayer" controls autoplay playsinline></video>
+
+          <!-- Cockpit HUD Overlay -->
+          <div class="hud-overlay" id="hudOverlay">
+            <div class="hud-top">
+              <div class="speedo-box">
+                <span class="speedo-val" id="hudSpeed">0</span>
+                <span class="speedo-unit">KM/H</span>
+                <span class="cruise-badge" id="hudCruise" style="display:none;">CRUISE 0</span>
+              </div>
+              <div class="steering-box">
+                <svg class="wheel-icon" id="hudWheel" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="8" fill="none"/>
+                  <circle cx="50" cy="50" r="14" fill="#3b82f6"/>
+                  <line x1="50" y1="50" x2="50" y2="8" stroke="#60a5fa" stroke-width="6"/>
+                  <line x1="50" y1="50" x2="14" y2="68" stroke="#60a5fa" stroke-width="6"/>
+                  <line x1="50" y1="50" x2="86" y2="68" stroke="#60a5fa" stroke-width="6"/>
+                </svg>
+                <span class="steer-deg" id="hudSteer">0.0°</span>
+              </div>
+            </div>
+
+            <div class="hud-bottom">
+              <div class="lead-badge" id="hudLead" style="display: none;">
+                <div class="lead-dot" id="leadDot"></div>
+                <span>前車距離: <strong id="hudLeadDist">--</strong> m</span>
+              </div>
+              <div class="pedals-box">
+                <div class="pedal-bar-wrap">
+                  <div class="pedal-meter"><div class="pedal-fill brake-fill" id="hudBrakeFill"></div></div>
+                  <span class="pedal-label">BRAKE</span>
+                </div>
+                <div class="pedal-bar-wrap">
+                  <div class="pedal-meter"><div class="pedal-fill gas-fill" id="hudGasFill"></div></div>
+                  <span class="pedal-label">GAS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Telemetry Dashboard -->
+      <div class="telemetry-card">
+        <div class="card-title-bar">
+          <div class="card-title">
+            <span>📈 行車遙測數據同步時間軸 (點選圖表跳轉)</span>
+          </div>
+          <div class="filter-chips">
+            <div class="chip active" data-metric="speed" onclick="toggleMetric(this)">
+              <div class="chip-dot" style="background: #3b82f6;"></div>車速 (Speed)
+            </div>
+            <div class="chip active" data-metric="steer" onclick="toggleMetric(this)">
+              <div class="chip-dot" style="background: #a855f7;"></div>方向盤 (Steer)
+            </div>
+            <div class="chip active" data-metric="accel" onclick="toggleMetric(this)">
+              <div class="chip-dot" style="background: #10b981;"></div>加減速 (Accel)
+            </div>
+            <div class="chip" data-metric="brake" onclick="toggleMetric(this)">
+              <div class="chip-dot" style="background: #ef4444;"></div>煞車 (Brake)
+            </div>
+            <div class="chip" data-metric="lead" onclick="toggleMetric(this)">
+              <div class="chip-dot" style="background: #f59e0b;"></div>前車距離 (Lead)
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-wrapper" id="chartWrapper">
+          <canvas id="chartCanvas"></canvas>
+          <div class="chart-tooltip" id="chartTooltip"></div>
+        </div>
+      </div>
+
+      <!-- Bottom Map & Stats -->
+      <div class="bottom-grid">
+        <div class="map-card">
+          <div id="map"></div>
+        </div>
+        <div class="metrics-summary">
+          <div class="metric-tile">
+            <span class="metric-label">即時車速</span>
+            <span class="metric-val" id="statSpeed">0 <small style="font-size:0.8rem;color:#9ca3af;">km/h</small></span>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">方向盤轉角</span>
+            <span class="metric-val" id="statSteer">0.0 <small style="font-size:0.8rem;color:#9ca3af;">deg</small></span>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">加速度</span>
+            <span class="metric-val" id="statAccel">0.00 <small style="font-size:0.8rem;color:#9ca3af;">m/s²</small></span>
+          </div>
+          <div class="metric-tile">
+            <span class="metric-label">前車距離</span>
+            <span class="metric-val" id="statLead">-- <small style="font-size:0.8rem;color:#9ca3af;">m</small></span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let currentSource = 'local';
+    let currentRoutes = [];
+    let currentSegment = null;
+    let currentCam = 'fcamera';
+    let telemetryData = null;
+    let map = null;
+    let carMarker = null;
+    let pathPolyline = null;
+
+    // Load saved IP
+    const savedIp = localStorage.getItem('comma_ip') || '';
+    document.getElementById('ipInput').value = savedIp;
+
+    function setSource(src) {
+      currentSource = src;
+      document.getElementById('srcLocalBtn').classList.toggle('active', src === 'local');
+      document.getElementById('srcRemoteBtn').classList.toggle('active', src === 'remote');
+      document.getElementById('localBar').style.display = src === 'local' ? 'flex' : 'none';
+      document.getElementById('remoteBar').style.display = src === 'remote' ? 'flex' : 'none';
+      if (src === 'remote') {
+        connectDevice();
+      } else {
+        loadRoutes();
+      }
+    }
+
+    async function connectDevice() {
+      const ip = document.getElementById('ipInput').value.trim();
+      if (!ip) return;
+      localStorage.setItem('comma_ip', ip);
+
+      const statusEl = document.getElementById('deviceStatus');
+      statusEl.innerHTML = '🔄 連線中...';
+      statusEl.style.color = '#9ca3af';
+
+      try {
+        const res = await fetch(`/api/device/test?ip=${encodeURIComponent(ip)}`);
+        const data = await res.json();
+        if (data.connected) {
+          statusEl.innerHTML = `🟢 已連線 (${data.storage || '30G'})`;
+          statusEl.style.color = '#34d399';
+          loadRoutes();
+        } else {
+          statusEl.innerHTML = `🔴 連線失敗`;
+          statusEl.style.color = '#f87171';
+          alert(`無法連線至 Comma (${ip})：\n${data.error || '連線逾時'}`);
+        }
+      } catch (e) {
+        statusEl.innerHTML = `🔴 錯誤`;
+        statusEl.style.color = '#f87171';
+      }
+    }
+
+    const activeMetrics = {
+      speed: true,
+      steer: true,
+      accel: true,
+      brake: false,
+      lead: false
+    };
+
+    const video = document.getElementById('videoPlayer');
+
+    // Initialize Map
+    function initMap() {
+      if (map) return;
+      map = L.map('map', { zoomControl: false }).setView([25.0, 121.3], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+
+      // Custom car icon
+      const carIcon = L.divIcon({
+        className: 'car-marker',
+        html: '<div style="width:16px;height:16px;background:#3b82f6;border:2px solid white;border-radius:50%;box-shadow:0 0 8px rgba(59,130,246,0.8);"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+      });
+      carMarker = L.marker([25.0, 121.3], { icon: carIcon }).addTo(map);
+    }
+
+    // Helper to get current API query string
+    function getApiQuery() {
+      if (currentSource === 'remote') {
+        const ip = document.getElementById('ipInput').value.trim();
+        return `source=remote&ip=${encodeURIComponent(ip)}`;
+      } else {
+        const p = document.getElementById('pathInput').value.trim();
+        return `source=local&path=${encodeURIComponent(p)}`;
+      }
+    }
+
+    // Load Routes
+    async function loadRoutes() {
+      const q = getApiQuery();
+      const el = document.getElementById('routesList');
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">正在載入路段...</div>';
+
+      try {
+        const res = await fetch(`/api/routes?${q}`);
+        const data = await res.json();
+        currentRoutes = data.routes || [];
+        renderRoutesList();
+        if (currentRoutes.length > 0 && currentRoutes[0].segments.length > 0) {
+          selectSegment(currentRoutes[0].segments[0].name);
+        } else {
+          el.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">路徑內無錄影資料 (若剛清空機子，請開車錄製後即可瀏覽)</div>';
+        }
+      } catch (e) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;color:#ef4444;">載入失敗</div>';
+        console.error("Failed to load routes", e);
+      }
+    }
+
+    function renderRoutesList(filtered) {
+      const list = filtered || currentRoutes;
+      const el = document.getElementById('routesList');
+      if (list.length === 0) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;color:#6b7280;">未找到任何路段</div>';
+        return;
+      }
+
+      let html = '';
+      list.forEach(r => {
+        html += `<div class="route-group">
+          <div class="route-header">
+            <span>${r.route_id}</span>
+            <span>${r.segments.length} Segs</span>
+          </div>`;
+        r.segments.forEach(s => {
+          const isActive = currentSegment === s.name ? 'active' : '';
+          html += `<div class="seg-item ${isActive}" onclick="selectSegment('${s.name}')">
+            <span class="seg-name">Seg #${s.segment_idx}</span>
+            <div class="seg-tags">
+              ${s.has_fcamera ? '<span class="badge badge-video">CAM</span>' : ''}
+              ${s.has_log ? '<span class="badge badge-log">LOG</span>' : ''}
+            </div>
+          </div>`;
+        });
+        html += `</div>`;
+      });
+      el.innerHTML = html;
+    }
+
+    function filterRoutes() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      if (!q) { renderRoutesList(); return; }
+      const filtered = [];
+      currentRoutes.forEach(r => {
+        const segs = r.segments.filter(s => s.name.toLowerCase().includes(q) || s.segment_idx.includes(q));
+        if (segs.length > 0 || r.route_id.toLowerCase().includes(q)) {
+          filtered.push({ ...r, segments: segs.length > 0 ? segs : r.segments });
+        }
+      });
+      renderRoutesList(filtered);
+    }
+
+    // Select and Play Segment
+    async function selectSegment(segName) {
+      currentSegment = segName;
+      renderRoutesList();
+
+      const q = getApiQuery();
+      // Load Video
+      video.src = `/api/video?segment=${encodeURIComponent(segName)}&cam=${currentCam}&${q}`;
+      video.play().catch(() => {});
+
+      // Load Telemetry
+      try {
+        const res = await fetch(`/api/telemetry?segment=${encodeURIComponent(segName)}&${q}`);
+        telemetryData = await res.json();
+        updateMapPath();
+        drawChart();
+      } catch (e) {
+        telemetryData = null;
+      }
+    }
+
+    function switchCamera(cam) {
+      currentCam = cam;
+      document.querySelectorAll('.cam-tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      if (currentSegment) {
+        const curTime = video.currentTime;
+        const q = getApiQuery();
+        video.src = `/api/video?segment=${encodeURIComponent(currentSegment)}&cam=${cam}&${q}`;
+        video.currentTime = curTime;
+        video.play().catch(() => {});
+      }
+    }
+
+    function toggleHud() {
+      const checked = document.getElementById('hudToggle').checked;
+      document.getElementById('hudOverlay').style.opacity = checked ? '1' : '0';
+    }
+
+    function toggleMetric(el) {
+      const m = el.dataset.metric;
+      activeMetrics[m] = !activeMetrics[m];
+      el.classList.toggle('active', activeMetrics[m]);
+      drawChart();
+    }
+
+    // Synchronized Video Playback Update
+    video.addEventListener('timeupdate', () => {
+      const curT = video.currentTime;
+      updateHudAndStats(curT);
+      drawChartCursor(curT);
+    });
+
+    video.addEventListener('ended', () => {
+      if (document.getElementById('autoNext').checked) {
+        playNextSegment();
+      }
+    });
+
+    function playNextSegment() {
+      let foundNext = false;
+      for (const r of currentRoutes) {
+        for (let i = 0; i < r.segments.length; i++) {
+          if (r.segments[i].name === currentSegment && i + 1 < r.segments.length) {
+            selectSegment(r.segments[i + 1].name);
+            foundNext = true;
+            break;
+          }
+        }
+        if (foundNext) break;
+      }
+    }
+
+    function updateHudAndStats(t) {
+      if (!telemetryData || !telemetryData.timeline) return;
+      const pt = telemetryData.timeline.find(p => p.t >= t) || telemetryData.timeline[telemetryData.timeline.length - 1];
+      if (!pt) return;
+
+      // HUD & Metric updates
+      document.getElementById('hudSpeed').innerText = Math.round(pt.speed || 0);
+      document.getElementById('statSpeed').innerHTML = `${Math.round(pt.speed || 0)} <small style="font-size:0.8rem;color:#9ca3af;">km/h</small>`;
+
+      const steer = (pt.steer || 0).toFixed(1);
+      document.getElementById('hudSteer').innerText = `${steer}°`;
+      document.getElementById('statSteer').innerHTML = `${steer} <small style="font-size:0.8rem;color:#9ca3af;">deg</small>`;
+      document.getElementById('hudWheel').style.transform = `rotate(${steer}deg)`;
+
+      const accel = (pt.aEgo || 0).toFixed(2);
+      document.getElementById('statAccel').innerHTML = `${accel} <small style="font-size:0.8rem;color:#9ca3af;">m/s²</small>`;
+
+      // Pedals
+      document.getElementById('hudBrakeFill').style.height = `${Math.min(100, (pt.brake || (pt.brake_pressed ? 100 : 0)))}%`;
+      document.getElementById('hudGasFill').style.height = `${pt.gas_pressed ? 80 : (pt.speed > 0 ? 30 : 0)}%`;
+
+      // Lead car
+      const hudLead = document.getElementById('hudLead');
+      if (pt.lead_d != null) {
+        hudLead.style.display = 'flex';
+        document.getElementById('hudLeadDist').innerText = pt.lead_d.toFixed(1);
+        document.getElementById('statLead').innerHTML = `${pt.lead_d.toFixed(1)} <small style="font-size:0.8rem;color:#9ca3af;">m</small>`;
+        const leadDot = document.getElementById('leadDot');
+        if (pt.lead_d < 15) leadDot.style.background = '#ef4444';
+        else if (pt.lead_d < 30) leadDot.style.background = '#f59e0b';
+        else leadDot.style.background = '#10b981';
+      } else {
+        hudLead.style.display = 'none';
+        document.getElementById('statLead').innerHTML = `-- <small style="font-size:0.8rem;color:#9ca3af;">m</small>`;
+      }
+
+      // GPS Marker on Map
+      if (pt.lat && pt.lon && carMarker && map) {
+        carMarker.setLatLng([pt.lat, pt.lon]);
+        map.panTo([pt.lat, pt.lon], { animate: true, duration: 0.2 });
+      }
+    }
+
+    function updateMapPath() {
+      if (!map) initMap();
+      if (!telemetryData || !telemetryData.timeline) return;
+
+      const pts = telemetryData.timeline
+        .filter(p => p.lat && p.lon && Math.abs(p.lat) > 0.1)
+        .map(p => [p.lat, p.lon]);
+
+      if (pathPolyline) map.removeLayer(pathPolyline);
+      if (pts.length > 0) {
+        pathPolyline = L.polyline(pts, { color: '#3b82f6', weight: 4, opacity: 0.8 }).addTo(map);
+        map.fitBounds(pathPolyline.getBounds(), { padding: [20, 20] });
+        carMarker.setLatLng(pts[0]);
+      }
+    }
+
+    // Canvas Chart Rendering
+    const canvas = document.getElementById('chartCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
+      canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    window.addEventListener('resize', () => { resizeCanvas(); drawChart(); });
+
+    function drawChart() {
+      resizeCanvas();
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+      ctx.clearRect(0, 0, w, h);
+
+      if (!telemetryData || !telemetryData.timeline || telemetryData.timeline.length < 2) return;
+      const data = telemetryData.timeline;
+      const duration = telemetryData.duration || 60;
+
+      // Draw Grid
+      ctx.strokeStyle = '#1e2433';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = (h / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Helper for scaling
+      const getX = t => (t / duration) * w;
+
+      // Draw Speed (0-140 km/h)
+      if (activeMetrics.speed) {
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        data.forEach((p, idx) => {
+          const x = getX(p.t);
+          const y = h - ((p.speed || 0) / 140) * (h - 20) - 10;
+          if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      // Draw Steering (-180 to +180 deg)
+      if (activeMetrics.steer) {
+        ctx.strokeStyle = '#a855f7';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        data.forEach((p, idx) => {
+          const x = getX(p.t);
+          const y = (h / 2) - ((p.steer || 0) / 180) * (h / 2 - 10);
+          if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      // Draw Accel (-4 to +4 m/s²)
+      if (activeMetrics.accel) {
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        data.forEach((p, idx) => {
+          const x = getX(p.t);
+          const y = (h / 2) - ((p.aEgo || 0) / 4) * (h / 2 - 10);
+          if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      // Draw Lead Distance (0 to 100m)
+      if (activeMetrics.lead) {
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        data.forEach((p, idx) => {
+          if (p.lead_d != null) {
+            const x = getX(p.t);
+            const y = h - (p.lead_d / 100) * (h - 20) - 10;
+            if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+        });
+        ctx.stroke();
+      }
+
+      drawChartCursor(video.currentTime);
+    }
+
+    function drawChartCursor(t) {
+      if (!telemetryData || !telemetryData.duration) return;
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+      const x = (t / telemetryData.duration) * w;
+
+      // Draw cursor without clearing entire chart
+      const el = document.getElementById('chartWrapper');
+      let cursor = document.getElementById('scrubberLine');
+      if (!cursor) {
+        cursor = document.createElement('div');
+        cursor.id = 'scrubberLine';
+        cursor.style.position = 'absolute';
+        cursor.style.top = '0';
+        cursor.style.bottom = '0';
+        cursor.style.width = '2px';
+        cursor.style.background = '#ef4444';
+        cursor.style.pointerEvents = 'none';
+        el.appendChild(cursor);
+      }
+      cursor.style.left = `${x}px`;
+    }
+
+    // Chart Click to Seek
+    document.getElementById('chartWrapper').addEventListener('click', e => {
+      if (!telemetryData || !telemetryData.duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const targetTime = (clickX / rect.width) * telemetryData.duration;
+      video.currentTime = targetTime;
+    });
+
+    // Initial load
+    initMap();
+    loadRoutes();
+  </script>
+</body>
+</html>

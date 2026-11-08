@@ -1,0 +1,597 @@
+#!/usr/bin/env python3
+"""
+Openpilot / Dragonpilot Local Drive Web Viewer Server
+Provides REST APIs for browsing routes, streaming videos, and extracting synchronized telemetry.
+"""
+
+import os
+import sys
+import glob
+import json
+import time
+import shutil
+import urllib.parse
+import subprocess
+from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# Auto-detect cereal directory for Cap'n Proto schemas
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+CEREAL_DIR = REPO_ROOT / "cereal"
+
+DEFAULT_LOCAL_PATH = os.path.expanduser("~/Downloads/comma_realdata")
+REMOTE_CACHE_DIR = os.path.expanduser("~/.cache/comma_viewer")
+PORT = 8082
+
+# Auto-detect SSH keys in ~/.ssh
+SSH_KEY = os.environ.get("COMMA_SSH_KEY")
+if not SSH_KEY:
+    ssh_dir = os.path.expanduser("~/.ssh")
+    if os.path.exists(ssh_dir):
+        # Look for standard or custom private keys
+        candidates = [
+            os.path.join(ssh_dir, f) for f in os.listdir(ssh_dir)
+            if (f.startswith("id_") or "comma" in f.lower()) and not f.endswith(".pub") and not f.endswith(".known_hosts")
+        ]
+        if candidates:
+            # Prefer id_ed25519 or any specific comma key
+            candidates.sort(key=lambda x: ("comma" in x, "ed25519" in x, "rsa" in x), reverse=True)
+            SSH_KEY = candidates[0]
+
+def get_ssh_cmd(ip: str, remote_cmd: str):
+    cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4"]
+    if SSH_KEY and os.path.exists(SSH_KEY):
+        cmd.extend(["-i", SSH_KEY])
+    cmd.extend([f"comma@{ip}", remote_cmd])
+    return cmd
+
+class TelemetryExtractor:
+    def __init__(self):
+        self._capnp_loaded = False
+        self._log_capnp = None
+
+    def _init_capnp(self):
+        if self._capnp_loaded:
+            return True
+        try:
+            import capnp
+            capnp.remove_import_hook()
+            schema_path = os.path.join(CEREAL_DIR, "log.capnp")
+            if os.path.exists(schema_path):
+                self._log_capnp = capnp.load(schema_path)
+                self._capnp_loaded = True
+                return True
+        except Exception as e:
+            print(f"[Extractor] Error loading capnp: {e}")
+        return False
+
+    def extract(self, segment_dir: str):
+        cache_file = os.path.join(segment_dir, ".telemetry.json")
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+
+        # Check for qlog.zst or rlog.zst
+        log_file = None
+        for name in ["qlog.zst", "rlog.zst"]:
+            candidate = os.path.join(segment_dir, name)
+            if os.path.exists(candidate) and os.path.getsize(candidate) > 100:
+                log_file = candidate
+                break
+
+        if not log_file or not self._init_capnp():
+            return None
+
+        try:
+            import zstandard as zstd
+            with open(log_file, "rb") as f:
+                dctx = zstd.ZstdDecompressor()
+                decomp = dctx.decompress(f.read(), max_output_size=120 * 1024 * 1024)
+
+            events = self._log_capnp.Event.read_multiple_bytes(decomp)
+            first_mono = None
+            
+            # Temporary storage with downsampling (~10Hz)
+            samples = {}
+
+            for evt in events:
+                mono = evt.logMonoTime
+                if first_mono is None:
+                    first_mono = mono
+                t_rel = (mono - first_mono) / 1e9
+                if t_rel < 0:
+                    continue
+
+                bucket = round(t_rel * 10) / 10.0  # 0.1s bucket
+                if bucket not in samples:
+                    samples[bucket] = {"t": bucket}
+                sample = samples[bucket]
+
+                w = evt.which()
+                if w == "carState":
+                    cs = evt.carState
+                    sample["speed"] = round(cs.vEgo * 3.6, 1)
+                    sample["steer"] = round(cs.steeringAngleDeg, 1)
+                    sample["steer_torque"] = round(cs.steeringTorque, 2)
+                    sample["steer_pressed"] = bool(cs.steeringPressed)
+                    sample["aEgo"] = round(cs.aEgo, 2)
+                    sample["gas_pressed"] = bool(cs.gasPressed)
+                    sample["brake_pressed"] = bool(cs.brakePressed)
+                    sample["brake"] = round(cs.brake * 100, 1) if hasattr(cs, "brake") else (100.0 if cs.brakePressed else 0.0)
+                    if hasattr(cs, "vCruise"):
+                        sample["vCruise"] = round(cs.vCruise, 1)
+                    if hasattr(cs, "leftBlinker") and hasattr(cs, "rightBlinker"):
+                        sample["blinker"] = -1 if cs.leftBlinker else (1 if cs.rightBlinker else 0)
+                elif w == "radarState":
+                    rs = evt.radarState
+                    if rs.leadOne.status:
+                        sample["lead_d"] = round(rs.leadOne.dRel, 1)
+                        sample["lead_v"] = round(rs.leadOne.vRel * 3.6, 1)
+                    else:
+                        sample["lead_d"] = None
+                        sample["lead_v"] = None
+                elif w == "gpsLocation" or w == "gpsLocationExternal":
+                    gps = getattr(evt, w)
+                    if hasattr(gps, "latitude") and hasattr(gps, "longitude"):
+                        if abs(gps.latitude) > 0.001 and abs(gps.longitude) > 0.001:
+                            sample["lat"] = round(gps.latitude, 6)
+                            sample["lon"] = round(gps.longitude, 6)
+                            sample["bearing"] = round(getattr(gps, "bearingDeg", 0), 1)
+
+            # Sort by time and interpolate missing fields
+            sorted_times = sorted(samples.keys())
+            timeline = []
+            last_valid = {"speed": 0, "steer": 0, "aEgo": 0, "gas_pressed": False, "brake_pressed": False, "brake": 0, "vCruise": 0, "lead_d": None, "lead_v": None, "lat": None, "lon": None, "bearing": 0, "blinker": 0}
+
+            for t in sorted_times:
+                s = samples[t]
+                # Carry forward or default
+                pt = {"t": t}
+                for k in ["speed", "steer", "aEgo", "gas_pressed", "brake_pressed", "brake", "vCruise", "lead_d", "lead_v", "blinker"]:
+                    if k in s:
+                        last_valid[k] = s[k]
+                    pt[k] = last_valid[k]
+                
+                # GPS update if available
+                if "lat" in s:
+                    pt["lat"] = s["lat"]
+                    pt["lon"] = s["lon"]
+                    pt["bearing"] = s.get("bearing", 0)
+                    last_valid["lat"] = s["lat"]
+                    last_valid["lon"] = s["lon"]
+                    last_valid["bearing"] = pt["bearing"]
+                elif last_valid["lat"] is not None:
+                    pt["lat"] = last_valid["lat"]
+                    pt["lon"] = last_valid["lon"]
+                    pt["bearing"] = last_valid["bearing"]
+
+                timeline.append(pt)
+
+            result = {
+                "segment": os.path.basename(segment_dir),
+                "duration": round(sorted_times[-1], 1) if sorted_times else 0,
+                "points_count": len(timeline),
+                "timeline": timeline
+            }
+
+            # Save cache
+            try:
+                with open(cache_file, "w") as f:
+                    json.dump(result, f)
+            except Exception:
+                pass
+
+            return result
+        except Exception as e:
+            print(f"[Extractor] Error processing {log_file}: {e}")
+            return None
+
+
+extractor = TelemetryExtractor()
+
+
+def ensure_mp4(segment_dir: str, cam: str) -> str:
+    """Ensure an MP4 file exists for the camera; remuxes from .hevc or .ts if needed."""
+    mp4_path = os.path.join(segment_dir, f"{cam}.mp4")
+    if os.path.exists(mp4_path) and os.path.getsize(mp4_path) > 1000:
+        return mp4_path
+
+    src_file = None
+    if cam in ["fcamera", "ecamera", "dcamera"]:
+        candidate = os.path.join(segment_dir, f"{cam}.hevc")
+        if os.path.exists(candidate):
+            src_file = candidate
+    elif cam == "qcamera":
+        candidate = os.path.join(segment_dir, "qcamera.ts")
+        if os.path.exists(candidate):
+            src_file = candidate
+
+    if not src_file:
+        return ""
+
+    ffmpeg = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+    if not os.path.exists(ffmpeg):
+        return src_file  # Fallback to source
+
+    try:
+        # Fast remux without re-encoding
+        cmd = [ffmpeg, "-y", "-i", src_file, "-c", "copy", mp4_path]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        if os.path.exists(mp4_path):
+            return mp4_path
+    except Exception as e:
+        print(f"[FFmpeg] Remux failed for {src_file}: {e}")
+
+    return src_file
+
+
+class ViewerHandler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Range")
+        super().end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.end_headers()
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
+
+        if path == "/" or path == "/index.html":
+            self.serve_static("web/index.html", "text/html")
+        elif path.startswith("/static/"):
+            rel_file = path[8:]
+            self.serve_static(os.path.join("web", rel_file))
+        elif path == "/api/sources":
+            self.handle_api_sources()
+        elif path == "/api/device/test":
+            self.handle_api_device_test(qs)
+        elif path == "/api/routes":
+            self.handle_api_routes(qs)
+        elif path == "/api/telemetry":
+            self.handle_api_telemetry(qs)
+        elif path == "/api/video":
+            self.handle_api_video(qs)
+        else:
+            self.send_error(404, "Not Found")
+
+    def serve_static(self, rel_path: str, content_type=None):
+        base_dir = Path(__file__).resolve().parent
+        full_path = base_dir / rel_path
+        if not full_path.exists():
+            self.send_error(404, "File not found")
+            return
+
+        if not content_type:
+            if rel_path.endswith(".html"): content_type = "text/html"
+            elif rel_path.endswith(".js"): content_type = "application/javascript"
+            elif rel_path.endswith(".css"): content_type = "text/css"
+            elif rel_path.endswith(".json"): content_type = "application/json"
+            else: content_type = "application/octet-stream"
+
+        with open(full_path, "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def handle_api_sources(self):
+        sources = [
+            {"name": "Local Downloaded (`~/Downloads/comma_realdata`)", "type": "local", "path": DEFAULT_LOCAL_PATH, "exists": os.path.exists(DEFAULT_LOCAL_PATH)},
+            {"name": "Comma Device (Remote over Wi-Fi/SSH)", "type": "remote"}
+        ]
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"sources": sources}).encode("utf-8"))
+
+    def handle_api_device_test(self, qs):
+        ip = qs.get("ip", [""])[0].strip()
+        if not ip:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"connected": False, "error": "Missing IP parameter"}).encode("utf-8"))
+            return
+        cmd = get_ssh_cmd(ip, "df -h /data | tail -n 1")
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                parts = res.stdout.strip().split()
+                storage = f"Total: {parts[1]}, Used: {parts[2]} ({parts[4]}), Free: {parts[3]}" if len(parts) >= 5 else res.stdout.strip()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"connected": True, "ip": ip, "storage": storage}).encode("utf-8"))
+                return
+            else:
+                err = res.stderr.strip() or "Connection failed"
+        except Exception as e:
+            err = str(e)
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"connected": False, "ip": ip, "error": err}).encode("utf-8"))
+
+    def handle_api_routes(self, qs):
+        source = qs.get("source", ["local"])[0]
+        ip = qs.get("ip", [""])[0].strip()
+
+        if source == "remote":
+            if not ip:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"routes": [], "error": "Missing IP parameter"}).encode("utf-8"))
+                return
+            # Query routes directly on remote device via SSH
+            remote_script = (
+                "python3 -c \""
+                "import os, json; root = '/data/media/0/realdata'; "
+                "print(json.dumps([{'name': d, 'files': os.listdir(os.path.join(root, d)), 'mtime': os.path.getmtime(os.path.join(root, d))} "
+                "for d in sorted(os.listdir(root)) if os.path.isdir(os.path.join(root, d))] if os.path.exists(root) else []))\""
+            )
+            cmd = get_ssh_cmd(ip, remote_script)
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+                if res.returncode != 0:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"routes": [], "error": f"Failed to connect to {ip}: {res.stderr.strip()}"}).encode("utf-8"))
+                    return
+                remote_subdirs = json.loads(res.stdout)
+            except Exception as e:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"routes": [], "error": f"Remote query failed: {str(e)}"}).encode("utf-8"))
+                return
+
+            routes_map = {}
+            for item in remote_subdirs:
+                d = item["name"]
+                files = item["files"]
+                parts = d.split("--")
+                route_id = f"{parts[0]}--{parts[1]}" if len(parts) >= 3 else d
+                seg_idx = parts[2] if len(parts) >= 3 else "0"
+
+                seg_info = {
+                    "name": d,
+                    "segment_idx": seg_idx,
+                    "has_fcamera": any(f.startswith("fcamera") for f in files),
+                    "has_ecamera": any(f.startswith("ecamera") for f in files),
+                    "has_qcamera": any(f.startswith("qcamera") for f in files),
+                    "has_log": any(f.endswith(".zst") for f in files),
+                    "is_remote": True,
+                    "mtime": item.get("mtime", 0)
+                }
+                if route_id not in routes_map:
+                    routes_map[route_id] = {"route_id": route_id, "segments": [], "mtime": seg_info["mtime"]}
+                routes_map[route_id]["segments"].append(seg_info)
+                if seg_info["mtime"] > routes_map[route_id]["mtime"]:
+                    routes_map[route_id]["mtime"] = seg_info["mtime"]
+
+            routes_list = list(routes_map.values())
+            routes_list.sort(key=lambda r: r["mtime"], reverse=True)
+            for r in routes_list:
+                r["segments"].sort(key=lambda s: int(s["segment_idx"]) if s["segment_idx"].isdigit() else s["segment_idx"])
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"base_path": f"comma@{ip}:/data/media/0/realdata", "is_remote": True, "routes": routes_list}).encode("utf-8"))
+            return
+
+        # Local routes
+        dir_path = qs.get("path", [DEFAULT_LOCAL_PATH])[0]
+        dir_path = os.path.expanduser(dir_path)
+
+        if not os.path.exists(dir_path):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"routes": [], "error": "Directory does not exist"}).encode("utf-8"))
+            return
+
+        subdirs = sorted([d for d in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, d))])
+        routes_map = {}
+
+        for d in subdirs:
+            full_sub = os.path.join(dir_path, d)
+            files = os.listdir(full_sub)
+
+            parts = d.split("--")
+            route_id = f"{parts[0]}--{parts[1]}" if len(parts) >= 3 else d
+            seg_idx = parts[2] if len(parts) >= 3 else "0"
+
+            seg_info = {
+                "name": d,
+                "segment_idx": seg_idx,
+                "has_fcamera": "fcamera.hevc" in files or "fcamera.mp4" in files,
+                "has_ecamera": "ecamera.hevc" in files or "ecamera.mp4" in files,
+                "has_qcamera": "qcamera.ts" in files or "qcamera.mp4" in files,
+                "has_log": "qlog.zst" in files or "rlog.zst" in files,
+                "cached_telemetry": ".telemetry.json" in files,
+                "is_remote": False,
+                "mtime": os.path.getmtime(full_sub)
+            }
+
+            if route_id not in routes_map:
+                routes_map[route_id] = {
+                    "route_id": route_id,
+                    "segments": [],
+                    "mtime": seg_info["mtime"]
+                }
+            routes_map[route_id]["segments"].append(seg_info)
+            if seg_info["mtime"] > routes_map[route_id]["mtime"]:
+                routes_map[route_id]["mtime"] = seg_info["mtime"]
+
+        routes_list = list(routes_map.values())
+        routes_list.sort(key=lambda r: r["mtime"], reverse=True)
+        for r in routes_list:
+            r["segments"].sort(key=lambda s: int(s["segment_idx"]) if s["segment_idx"].isdigit() else s["segment_idx"])
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"base_path": dir_path, "is_remote": False, "routes": routes_list}).encode("utf-8"))
+
+    def handle_api_telemetry(self, qs):
+        source = qs.get("source", ["local"])[0]
+        ip = qs.get("ip", [""])[0].strip()
+        seg_name = qs.get("segment", [""])[0]
+
+        if not seg_name:
+            self.send_error(400, "Missing segment parameter")
+            return
+
+        if source == "remote":
+            if not ip:
+                self.send_error(400, "Missing IP parameter")
+                return
+            cache_dir = os.path.join(REMOTE_CACHE_DIR, ip, seg_name)
+            os.makedirs(cache_dir, exist_ok=True)
+            cached_json = os.path.join(cache_dir, ".telemetry.json")
+            if not os.path.exists(cached_json):
+                # Fetch remote qlog.zst via scp
+                remote_file = f"comma@{ip}:/data/media/0/realdata/{seg_name}/qlog.zst"
+                dest_file = os.path.join(cache_dir, "qlog.zst")
+                scp_cmd = ["scp", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=4"]
+                if SSH_KEY: scp_cmd.extend(["-i", SSH_KEY])
+                scp_cmd.extend([remote_file, dest_file])
+                subprocess.run(scp_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            data = extractor.extract(cache_dir)
+        else:
+            base_dir = os.path.expanduser(qs.get("path", [DEFAULT_LOCAL_PATH])[0])
+            seg_dir = os.path.join(base_dir, seg_name)
+            if not os.path.exists(seg_dir):
+                self.send_error(404, "Segment not found")
+                return
+            data = extractor.extract(seg_dir)
+
+        if not data:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "No telemetry found or parsing failed"}).encode("utf-8"))
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode("utf-8"))
+
+    def handle_api_video(self, qs):
+        source = qs.get("source", ["local"])[0]
+        ip = qs.get("ip", [""])[0].strip()
+        seg_name = qs.get("segment", [""])[0]
+        cam = qs.get("cam", ["fcamera"])[0]
+
+        if not seg_name:
+            self.send_error(400, "Missing segment parameter")
+            return
+
+        if source == "remote":
+            if not ip:
+                self.send_error(400, "Missing IP parameter")
+                return
+            cache_dir = os.path.join(REMOTE_CACHE_DIR, ip, seg_name)
+            os.makedirs(cache_dir, exist_ok=True)
+            mp4_file = os.path.join(cache_dir, f"{cam}.mp4")
+            if not os.path.exists(mp4_file):
+                # Download remote file
+                ext = "ts" if cam == "qcamera" else "hevc"
+                src_filename = f"{cam}.{ext}"
+                remote_file = f"comma@{ip}:/data/media/0/realdata/{seg_name}/{src_filename}"
+                dest_file = os.path.join(cache_dir, src_filename)
+                if not os.path.exists(dest_file):
+                    scp_cmd = ["scp", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=6"]
+                    if SSH_KEY: scp_cmd.extend(["-i", SSH_KEY])
+                    scp_cmd.extend([remote_file, dest_file])
+                    subprocess.run(scp_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
+                ensure_mp4(cache_dir, cam)
+            target_file = mp4_file if os.path.exists(mp4_file) else os.path.join(cache_dir, f"{cam}.{ext}")
+        else:
+            base_dir = os.path.expanduser(qs.get("path", [DEFAULT_LOCAL_PATH])[0])
+            seg_dir = os.path.join(base_dir, seg_name)
+            target_file = ensure_mp4(seg_dir, cam)
+
+        if not target_file or not os.path.exists(target_file):
+            self.send_error(404, f"Video {cam} not found")
+            return
+
+        self.serve_file_with_range(target_file)
+        target_file = ensure_mp4(seg_dir, cam)
+
+        if not target_file or not os.path.exists(target_file):
+            self.send_error(404, f"Video {cam} not found")
+            return
+
+        self.serve_file_with_range(target_file)
+
+    def serve_file_with_range(self, filepath: str):
+        file_size = os.path.getsize(filepath)
+        range_header = self.headers.get("Range")
+
+        mime = "video/mp4"
+        if filepath.endswith(".ts"): mime = "video/mp2t"
+        elif filepath.endswith(".hevc"): mime = "video/hevc"
+
+        if range_header:
+            range_match = range_header.strip().replace("bytes=", "").split("-")
+            start = int(range_match[0]) if range_match[0] else 0
+            end = int(range_match[1]) if len(range_match) > 1 and range_match[1] else file_size - 1
+            length = end - start + 1
+
+            self.send_response(206)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+            self.send_header("Content-Length", str(length))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+
+            with open(filepath, "rb") as f:
+                f.seek(start)
+                sent = 0
+                while sent < length:
+                    chunk = f.read(min(64 * 1024, length - sent))
+                    if not chunk: break
+                    self.wfile.write(chunk)
+                    sent += len(chunk)
+        else:
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(file_size))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+
+            with open(filepath, "rb") as f:
+                shutil.copyfileobj(f, self.wfile)
+
+
+def run_server():
+    server = HTTPServer(("0.0.0.0", PORT), ViewerHandler)
+    print(f"\n=======================================================")
+    print(f"🚀 Openpilot Drive Viewer Running at: http://localhost:{PORT}")
+    print(f"📂 Default Data Path: {DEFAULT_LOCAL_PATH}")
+    print(f"=======================================================\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping viewer server...")
+        server.server_close()
+
+
+if __name__ == "__main__":
+    run_server()
