@@ -1484,13 +1484,6 @@
       }
     }
 
-      // GPS Marker on Map
-      if (pt.lat && pt.lon && carMarker && map) {
-        carMarker.setLatLng([pt.lat, pt.lon]);
-        map.panTo([pt.lat, pt.lon], { animate: true, duration: 0.2 });
-      }
-    }
-
     function updateMapPath() {
       if (!map) initMap();
       if (!telemetryData || !telemetryData.timeline) return;
