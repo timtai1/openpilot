@@ -116,6 +116,41 @@ reboot
   * Established hot-reload deployment for pure Python, translation, and asset changes.
   * UI restarts and reloads changes via `selfdrive.ui` in ~1 second.
 
-### 8. 🤖 AI-Assisted Development
-* All custom features in this fork—including the offline GPS country bounding algorithms, permanent manual steering position lock, full-speed proportional gentle acceleration scaling, 2x distance early smooth braking kinematics, runtime Python PO translation parser, Raylib font atlas baking pipeline, and on-device hot-reload developer workflows—were developed, debugged, and verified end-to-end with **Gemini 3.8 Flash**.
+### 8. 🖥️ Local Web Drive & Telemetry Viewer
+* **Offline Zero-Latency Video & Telemetry Playback**:
+  * Built-in lightweight web server and telemetry dashboard accessible at `http://localhost:8082`.
+  * **Dual Data Source Support**:
+    * 📁 **Local Directory**: Browse downloaded driving segments on your computer (default `~/Downloads/comma_realdata`).
+    * 📡 **Remote Comma Device**: Enter the Comma device IP to query and stream `/data/media/0/realdata` directly over local Wi-Fi via SSH.
+  * **Tri-Camera Angle Switching**:
+    * `Road` (Standard wide front camera `fcamera.hevc`)
+    * `Wide` (Ultra-wide front camera `ecamera.hevc`)
+    * `Driver` (Cabin driver monitoring camera `qcamera.ts`)
+  * **Real-Time Driving Telemetry HUD Overlay**:
+    * Vehicle speed (km/h), animated rotating steering wheel with exact angle (°).
+    * Longitudinal and lateral G-meter, lead vehicle distance (m), accelerator and brake pedal indicators.
+  * **Synchronized Interactive Timeline & GPS Trajectory Map**:
+    * Interactive chart plotting speed, steering angle, acceleration, pedal inputs, and lead distance with individual metric toggles.
+    * Synchronized Leaflet GPS map with real-time vehicle marker movement.
+    * Draggable split-pane layout for adjusting video vs. telemetry chart heights.
+  * **Chronological Sorting**:
+    * Sort routes by recording timestamp with one-click `[ ⬇️ Newest First ]` / `[ ⬆️ Oldest First ]` toggle.
+  * **Quick Start**:
+    ```bash
+    # Run with uv (auto-installs pycapnp and zstandard without polluting environment):
+    uv run --no-project --with pycapnp --with zstandard python3 tools/web_viewer/server.py
+
+    # Or run with standard pip dependencies:
+    pip install pycapnp zstandard
+    python3 tools/web_viewer/server.py
+    ```
+    Then open your browser to `http://localhost:8082`.
+
+### 9. 🧹 Offline Loop Recording & Storage Optimization
+* **Resolved 95% Disk Full Stall**:
+  * Fixed an issue where offline devices (`dp_dev_disable_connect = True`) skipped running `uploader`, leaving orphan `.lock` files that prevented `deleter.py` from purging old segments and caused a 0.1s spin loop consuming ~30% CPU.
+  * Added independent lock purging and stale lock clearing so old recordings are cleanly recycled, keeping 20+ GB of free storage.
+
+### 10. 🤖 AI-Assisted Development
+* All custom features in this fork—including the offline GPS country bounding algorithms, permanent manual steering position lock, full-speed proportional gentle acceleration scaling, 2x distance early smooth braking kinematics, runtime Python PO translation parser, Raylib font atlas baking pipeline, local web drive viewer, and on-device hot-reload developer workflows—were developed, debugged, and verified end-to-end with **Gemini 3.8 Flash**.
 

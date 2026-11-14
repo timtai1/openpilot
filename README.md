@@ -116,5 +116,40 @@ reboot
   * 針對 Python 程式碼、翻譯檔與字型圖檔更新，建立快速熱重載流程。
   * 透過背景重新啟動 `selfdrive.ui`，在 1 秒內無縫套用最新變更。
 
-### 8. 🤖 AI 協同開發 (AI-Assisted Development)
-* 本專案包含離線 GPS 國家地理邊界演算法、方向盤設定永久鎖定、全速域溫和加速線性縮放、提前兩倍距離平順煞車運動學推導、純 Python 翻譯檔解析引擎、Raylib 點陣字型圖集烘焙工具鏈，以及裝置端熱重載與即時除錯工作流，全程使用 **Gemini 3.8 Flash** 進行對話式引導開發與實作驗證。
+### 8. 🖥️ 本地 Web 行車影像與即時遙測瀏覽器 (Local Drive & Telemetry Viewer)
+* **無需上傳雲端，全離線零延遲播放**：
+  * 內建專屬輕量 Web 伺服器與行車數據視覺化面板，瀏覽器開啟 `http://localhost:8082` 即可直接播放行車紀錄影片與即時數值。
+  * **雙模式來源切換**：
+    * 📁 **本機目錄**：直接瀏覽已下載至電腦的資料夾（如預設 `~/Downloads/comma_realdata`）。
+    * 📡 **Comma 裝置遠端連線**：直接於網頁介面輸入 Comma 裝置 IP，透過區域網路 SSH 自動讀取機上 `/data/media/0/realdata` 片段並串流播放。
+  * **三鏡頭視角無縫切換**：
+    * `Road`（標準廣角前鏡頭 `fcamera.hevc`）
+    * `Wide`（超廣角前鏡頭 `ecamera.hevc`）
+    * `Driver`（駕駛室監控鏡頭 `qcamera.ts`）
+  * **即時行車遙測 HUD 浮動儀表**：
+    * 車速（km/h）、真實方向盤旋轉動畫與轉向角度（度數）。
+    * 縱向與橫向 G-meter 加減速感測儀、前車偵測距離（公尺）、油門踩踏與煞車狀態指示燈。
+  * **多維度同步時間軸圖表與 GPS 軌跡地圖**：
+    * 即時同步繪製車速、方向盤轉向角、加減速度、油門、煞車與前車距離曲線，各項數據可個別自由開關顯示。
+    * 同步 Leaflet GPS 衛星軌跡地圖，時間軸拖曳播放時車輛釘選圖示即時聯動。
+    * 支援滑鼠上下拖曳分隔線自訂調整影像與圖表高度。
+  * **依行車時間排序**：
+    * 自動解析路線時間戳記，提供「新到舊 ⬇️」與「舊到新 ⬆️」時間排序切換。
+  * **快速啟動指令**：
+    ```bash
+    # 使用 uv 快速啟動（自動載入 pycapnp 與 zstandard 依賴）：
+    uv run --no-project --with pycapnp --with zstandard python3 tools/web_viewer/server.py
+
+    # 或透過標準 pip 安裝依賴後啟動：
+    pip install pycapnp zstandard
+    python3 tools/web_viewer/server.py
+    ```
+    啟動後開啟瀏覽器訪問：`http://localhost:8082`
+
+### 9. 🧹 離線循環錄影與儲存空間修復 (Storage & Deleter Optimization)
+* **解決儲存空間 95% 塞滿卡死**：
+  * 修復開源版 openpilot 在關閉連網（`dp_dev_disable_connect = True`）時，因未啟動 `uploader` 導致 `.lock` 鎖定檔殘留、使 `deleter.py` 拒絕刪除歷史片段而在背景以 0.1s 迴圈空轉（佔用 30% CPU）的問題。
+  * 獨立鎖定清除機制與自動排除孤立鎖，在空間不足時自動依時間循環覆蓋最舊錄影，保持 20+ GB 充足剩餘空間，確保長途駕駛錄影不中斷。
+
+### 10. 🤖 AI 協同開發 (AI-Assisted Development)
+* 本專案包含離線 GPS 國家地理邊界演算法、方向盤設定永久鎖定、全速域溫和加速線性縮放、提前兩倍距離平順煞車運動學推導、純 Python 翻譯檔解析引擎、Raylib 點陣字型圖集烘焙工具鏈、本地 Web 行車影像與遙測同步瀏覽器，以及裝置端熱重載與即時除錯工作流，全程使用 **Gemini 3.8 Flash** 進行對話式引導開發與實作驗證。
