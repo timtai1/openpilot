@@ -79,6 +79,20 @@ If SSH commands return `Connection timed out`, `Host is down`, or `No route to h
     - Early smooth deceleration when closing in on slowing or stopped lead vehicles: calculates $v_{\text{smooth\_target}} = \sqrt{v_{\text{lead}}^2 + 2 \cdot a_{\text{gentle}} \cdot d_{\text{eff}}}$ with $a_{\text{gentle}} = 2.5 / \text{mult}\ \text{m/s}^2$ (default index 1 = $1.25\ \text{m/s}^2$ at 2x distance).
     - Hard safety constraints and emergency braking in MPC remain completely intact and unaffected.
 
+### 5. Toyota CC Curve Tuning (Toyota CC 進彎調教)
+- **Parameter**: `dp_lat_toyota_cc_curve` (Boolean, `PERSISTENT`, default: `True` / `1`)
+- **UI Location**: Under `### 橫向控制 ###` (`Lateral` section)
+- **Problem addressed**:
+  - Toyota Corolla Cross (SUV) has a higher center of gravity, softer suspension roll inertia, and slower steering ratio (~14.95 vs sedan 13.9).
+  - Standard openpilot torque controller kicks excessive initial torque on curve entry via `JERK_GAIN = 0.30`, causing steering angle overshoot before chassis roll settles, followed by aggressive high-speed PID snap-back ($K_p = 0.80$) that feels like an uncomfortable wobble to passengers.
+- **Implementation**:
+  - `dragonpilot/settings/min-feat.lat.toyota-cc-curve.yaml` / `.py`
+  - In `opendbc_repo/opendbc/car/toyota/interface.py`:
+    - Automatically sets Corolla Cross baseline `steerRatio = 14.95` (matches actual measured 14.96 instead of sedan 13.9).
+  - In `selfdrive/controls/lib/latcontrol_torque.py`:
+    - Damps curve entry jerk feedforward: `JERK_GAIN_CC = 0.15` (halved from standard 0.30).
+    - Damps high-speed PID proportional gain: `KP_INTERP_CC` ($1.4 \rightarrow 0.60$ at 15–30 m/s vs standard $2.0 \rightarrow 0.80$), eliminating overshoot oscillation and creating smooth, confident curve entry.
+
 ---
 
 ## Fast Operations Runbook
