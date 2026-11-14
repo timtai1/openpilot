@@ -163,7 +163,11 @@ class DragonpilotLayout(Widget):
 
     # Handle initial values
     if item_type == "toggle_item":
-      args["initial_state"] = ui_state.params.get_bool(param_name)
+      raw_val = ui_state.params.get(param_name)
+      if raw_val is None and setting.get("default") is not None:
+        args["initial_state"] = str(setting.get("default")).lower() in ("true", "1")
+      else:
+        args["initial_state"] = ui_state.params.get_bool(param_name)
     else:
       raw_val = ui_state.params.get(param_name)
       initial_val = raw_val.decode() if isinstance(raw_val, bytes) else raw_val
@@ -303,7 +307,11 @@ class DragonpilotLayout(Widget):
       default = meta.get("default")
 
       if item_type == "toggle_item":
-        widget.action_item.set_state(ui_state.params.get_bool(param_name))
+        raw_val = ui_state.params.get(param_name)
+        if raw_val is None and default is not None:
+          widget.action_item.set_state(str(default).lower() in ("true", "1"))
+        else:
+          widget.action_item.set_state(ui_state.params.get_bool(param_name))
       else:  # Spinners
         raw_val = ui_state.params.get(param_name)
         val_str = None

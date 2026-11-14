@@ -570,6 +570,16 @@ msgstr "温和刹车"
 msgid "Smoothly slows down for stopped or slowing lead vehicles at 1.5x, 2.0x, or 2.5x the normal distance with proportionally reduced deceleration force."
 msgstr "接近减速或停等红灯的前车时，于正常刹车距离的 1.5x、2.0x 或 2.5x 倍距离提前平顺减速，刹车力道依倍数成比例减弱。"
 
+#: dragonpilot/settings/min-feat.lat.toyota-cc-curve.py:8
+#, python-format
+msgid "Toyota CC Curve Tuning"
+msgstr "Toyota CC 进弯调教"
+
+#: dragonpilot/settings/min-feat.lat.toyota-cc-curve.py:9
+#, python-format
+msgid "Smooths out lateral jerk feedforward and reduces PID sensitivity on curve entry, tailored for Toyota Corolla Cross to prevent excessive initial steering angle and wobble."
+msgstr "针对 Toyota Corolla Cross (SUV) 转向特性进行调校：入弯时平滑侧向冲动前馈并适度降低比例增益，有效消除大角度过冲与左右拉扯晃动感。"
+
 #: dragonpilot/settings/min-feat.ui.hide-hud.py:14
 #, python-format
 msgid "km/h"

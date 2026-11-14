@@ -100,6 +100,16 @@ class CarInterface(CarInterfaceBase):
       # TODO: Some of these platforms are not advertised to have full range ACC, do they really all have sng?
       stop_and_go = True
 
+    elif candidate == CAR.TOYOTA_COROLLA_TSS2:
+      # Corolla Cross shares TOYOTA_COROLLA_TSS2 platform, but has a higher ride height and slower steering ratio (~14.95 vs 13.9)
+      try:
+        from openpilot.common.params import Params
+        val = Params().get("dp_lat_toyota_cc_curve")
+        if val is None or val in (b'1', '1', True):
+          ret.steerRatio = 14.95
+      except Exception:
+        ret.steerRatio = 14.95
+
     ret.centerToFront = ret.wheelbase * 0.44
 
     # TODO: Some TSS-P platforms have BSM, but are flipped based on region or driving direction.

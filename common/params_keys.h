@@ -163,4 +163,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"dp_ui_hide_hud_speed_kph", {PERSISTENT, INT, "0"}},
     {"dp_ui_lead", {PERSISTENT, INT, "0"}},
     {"dp_ui_rainbow", {PERSISTENT, BOOL, "0"}},
+    {"dp_lon_smooth_accel", {PERSISTENT, INT, "0"}},
+    {"dp_lon_gentle_brake", {PERSISTENT, INT, "1"}},
+    {"dp_lat_toyota_cc_curve", {PERSISTENT, BOOL, "1"}},
 };
