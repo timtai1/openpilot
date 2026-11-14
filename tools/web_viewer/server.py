@@ -566,16 +566,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
             remote_script = (
                 "python3 -c \""
                 "import os, json; root = '/data/media/0/realdata'; "
-                "res = []; "
-                "if os.path.exists(root): "
-                "    for d in sorted(os.listdir(root)): "
-                "        p = os.path.join(root, d); "
-                "        if os.path.isdir(p): "
-                "            files = os.listdir(p); "
-                "            orig = [f for f in ['qlog.zst', 'rlog.zst', 'fcamera.hevc', 'ecamera.hevc', 'dcamera.hevc', 'qcamera.ts'] if f in files]; "
-                "            mt = min([os.path.getmtime(os.path.join(p, f)) for f in orig]) if orig else os.path.getmtime(p); "
-                "            res.append({'name': d, 'files': files, 'mtime': mt}); "
-                "print(json.dumps(res))\""
+                "print(json.dumps([{'name': d, 'files': os.listdir(os.path.join(root, d)), 'mtime': min([os.path.getmtime(os.path.join(root, d, f)) for f in ['qlog.zst', 'rlog.zst', 'fcamera.hevc', 'ecamera.hevc', 'dcamera.hevc', 'qcamera.ts'] if os.path.exists(os.path.join(root, d, f))] or [os.path.getmtime(os.path.join(root, d))])} for d in sorted(os.listdir(root)) if os.path.isdir(os.path.join(root, d))] if os.path.exists(root) else []))\""
             )
             cmd = get_ssh_cmd(ip, remote_script)
             try:
@@ -799,36 +790,39 @@ class ViewerHandler(BaseHTTPRequestHandler):
         if filepath.endswith(".ts"): mime = "video/mp2t"
         elif filepath.endswith(".hevc"): mime = "video/hevc"
 
-        if range_header:
-            range_match = range_header.strip().replace("bytes=", "").split("-")
-            start = int(range_match[0]) if range_match[0] else 0
-            end = int(range_match[1]) if len(range_match) > 1 and range_match[1] else file_size - 1
-            length = end - start + 1
+        try:
+            if range_header:
+                range_match = range_header.strip().replace("bytes=", "").split("-")
+                start = int(range_match[0]) if range_match[0] else 0
+                end = int(range_match[1]) if len(range_match) > 1 and range_match[1] else file_size - 1
+                length = end - start + 1
 
-            self.send_response(206)
-            self.send_header("Content-Type", mime)
-            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
-            self.send_header("Content-Length", str(length))
-            self.send_header("Accept-Ranges", "bytes")
-            self.end_headers()
+                self.send_response(206)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+                self.send_header("Content-Length", str(length))
+                self.send_header("Accept-Ranges", "bytes")
+                self.end_headers()
 
-            with open(filepath, "rb") as f:
-                f.seek(start)
-                sent = 0
-                while sent < length:
-                    chunk = f.read(min(64 * 1024, length - sent))
-                    if not chunk: break
-                    self.wfile.write(chunk)
-                    sent += len(chunk)
-        else:
-            self.send_response(200)
-            self.send_header("Content-Type", mime)
-            self.send_header("Content-Length", str(file_size))
-            self.send_header("Accept-Ranges", "bytes")
-            self.end_headers()
+                with open(filepath, "rb") as f:
+                    f.seek(start)
+                    sent = 0
+                    while sent < length:
+                        chunk = f.read(min(64 * 1024, length - sent))
+                        if not chunk: break
+                        self.wfile.write(chunk)
+                        sent += len(chunk)
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(file_size))
+                self.send_header("Accept-Ranges", "bytes")
+                self.end_headers()
 
-            with open(filepath, "rb") as f:
-                shutil.copyfileobj(f, self.wfile)
+                with open(filepath, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
 
 def run_server():
