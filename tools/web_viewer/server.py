@@ -82,7 +82,7 @@ class SyncManager:
                 ssh_opt = f"-i {SSH_KEY} {ssh_opt}"
 
             rsync_cmd = [
-                "rsync", "-avz", "--partial", "--info=progress2",
+                "rsync", "-avz", "--partial", "--progress",
                 "-e", f"ssh {ssh_opt}",
                 f"comma@{ip}:/data/media/0/realdata/",
                 f"{dest}/"
@@ -100,19 +100,21 @@ class SyncManager:
                 line = line.strip()
                 if not line:
                     continue
-                parts = line.split()
-                if len(parts) >= 2 and "%" in parts[1]:
+                # Parse progress with regex e.g. " 100% 12.34MB/s"
+                m_pct = re.search(r"(\d+)%", line)
+                if m_pct:
                     try:
-                        pct = int(parts[1].replace("%", ""))
-                        speed = parts[2] if len(parts) > 2 else ""
+                        pct = int(m_pct.group(1))
+                        m_spd = re.search(r"(\d+(?:\.\d+)?[kKMGT]?B/s)", line)
+                        speed = m_spd.group(1) if m_spd else ""
                         with self.lock:
                             self.percent = pct
-                            self.progress_text = f"同步中 {pct}% ({speed})"
+                            self.progress_text = f"同步中 {pct}% ({speed})" if speed else f"同步中 {pct}%"
                     except Exception:
                         pass
                 else:
                     with self.lock:
-                        self.progress_text = f"傳輸中: {line[:30]}"
+                        self.progress_text = f"傳輸中: {line[:35]}"
 
             process.wait()
             if process.returncode == 0:
@@ -172,6 +174,50 @@ def parse_segment_time(seg_name: str, sub_path: str, files: list[str]) -> tuple[
     t_short = time.strftime('%H:%M:%S', time.localtime(mt)) if mt else ""
     return mt, t_str, t_short
 
+
+def sanitize_route_segments(segments: list[dict]) -> tuple[float, str]:
+    """Repairs pre-GPS cold-boot segment timestamps (e.g. 21:47 RTC) using contiguous 60s offsets from GPS-locked segments."""
+    if not segments:
+        return 0, ""
+
+    def get_idx(s):
+        try:
+            return int(s.get("segment_idx", 0))
+        except Exception:
+            return 0
+
+    segments.sort(key=get_idx)
+
+    # Find the most reliable reference timestamp in this route (latest segments almost always have GPS lock)
+    max_mtime = max((s.get("mtime", 0) for s in segments), default=0)
+    if max_mtime <= 0:
+        return 0, ""
+
+    # Find first segment whose timestamp is valid (within 2 days of route max mtime)
+    ref_seg = None
+    for s in segments:
+        s_mt = s.get("mtime", 0)
+        if s_mt > 0 and abs(max_mtime - s_mt) < 86400 * 2:
+            ref_seg = s
+            break
+
+    if ref_seg:
+        ref_idx = get_idx(ref_seg)
+        ref_mt = ref_seg["mtime"]
+        for s in segments:
+            idx = get_idx(s)
+            s_mt = s.get("mtime", 0)
+            expected_mt = ref_mt + (idx - ref_idx) * 60.0
+            # If timestamp is missing or wildly divergent (> 6h off expected contiguous time)
+            if s_mt <= 0 or abs(s_mt - expected_mt) > 3600 * 6:
+                s["mtime"] = expected_mt
+                s["time_str"] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(expected_mt))
+                s["time_short"] = time.strftime('%H:%M:%S', time.localtime(expected_mt))
+
+    route_mtime = segments[0]["mtime"]
+    date_str = segments[0]["time_str"][:16] if segments[0].get("time_str") else ""
+    return route_mtime, date_str
+
 class TelemetryExtractor:
     def __init__(self):
         self._capnp_loaded = False
@@ -199,8 +245,8 @@ class TelemetryExtractor:
                 with open(cache_file, "r") as f:
                     cdata = json.load(f)
                     if cdata and cdata.get("points_count", 0) > 0 and cdata.get("duration", 0) < 300:
-                        # Ensure engaged key is in cache points
-                        if len(cdata.get("timeline", [])) > 0 and "engaged" in cdata["timeline"][0]:
+                        # Ensure engaged and gear keys are in cache points
+                        if len(cdata.get("timeline", [])) > 0 and "engaged" in cdata["timeline"][0] and "gear" in cdata["timeline"][0]:
                             return cdata
             except Exception:
                 pass
@@ -312,6 +358,24 @@ class TelemetryExtractor:
                         sample["blinker"] = -1 if cs.leftBlinker else (1 if cs.rightBlinker else 0)
                     if hasattr(cs, "cruiseState") and hasattr(cs.cruiseState, "enabled"):
                         sample["cruise_enabled"] = bool(cs.cruiseState.enabled)
+                    if hasattr(cs, "gearShifter"):
+                        g_str = str(cs.gearShifter).lower()
+                        gear_map = {"park": "P", "reverse": "R", "neutral": "N", "drive": "D", "sport": "S", "low": "L", "brake": "B"}
+                        sample["gear"] = gear_map.get(g_str, g_str.upper()[:1] if g_str else "D")
+                elif w == "deviceState":
+                    ds = evt.deviceState
+                    dev = {}
+                    if hasattr(ds, "cpuTempC") and len(ds.cpuTempC) > 0:
+                        dev["cpu_temp"] = round(float(max(ds.cpuTempC)), 1)
+                    if hasattr(ds, "gpuTempC") and len(ds.gpuTempC) > 0:
+                        dev["gpu_temp"] = round(float(max(ds.gpuTempC)), 1)
+                    if hasattr(ds, "memoryUsagePercent"):
+                        dev["mem_pct"] = int(ds.memoryUsagePercent)
+                    if hasattr(ds, "freeSpacePercent"):
+                        dev["storage_pct"] = round(float(ds.freeSpacePercent), 1)
+                    if hasattr(ds, "fanSpeedPercentDesired"):
+                        dev["fan_pct"] = int(ds.fanSpeedPercentDesired)
+                    sample["device"] = dev
                 elif w == "radarState":
                     rs = evt.radarState
                     if rs.leadOne.status:
@@ -331,17 +395,29 @@ class TelemetryExtractor:
             # Sort by time and interpolate missing fields
             sorted_times = sorted(samples.keys())
             timeline = []
-            last_valid = {"speed": 0, "steer": 0, "aEgo": 0, "gas_pressed": False, "brake_pressed": False, "brake": 0, "vCruise": 0, "lead_d": None, "lead_v": None, "lat": None, "lon": None, "bearing": 0, "blinker": 0, "engaged": False}
+            last_valid = {
+                "speed": 0, "steer": 0, "aEgo": 0, "gas_pressed": False,
+                "brake_pressed": False, "brake": 0, "vCruise": 0, "lead_d": None,
+                "lead_v": None, "lat": None, "lon": None, "bearing": 0, "blinker": 0,
+                "engaged": False, "gear": "D",
+                "device": {"cpu_temp": None, "gpu_temp": None, "mem_pct": None, "storage_pct": None, "fan_pct": None}
+            }
 
             for t in sorted_times:
                 s = samples[t]
                 pt = {"t": t}
-                for k in ["speed", "steer", "aEgo", "gas_pressed", "brake_pressed", "brake", "vCruise", "lead_d", "lead_v", "blinker", "engaged"]:
+                for k in ["speed", "steer", "aEgo", "gas_pressed", "brake_pressed", "brake", "vCruise", "lead_d", "lead_v", "blinker", "engaged", "gear", "device"]:
                     if k in s:
-                        last_valid[k] = s[k]
+                        if k == "device" and isinstance(s[k], dict):
+                            last_valid["device"].update(s[k])
+                        else:
+                            last_valid[k] = s[k]
                     elif k == "engaged" and ("cruise_enabled" in s):
                         last_valid[k] = s["cruise_enabled"]
-                    pt[k] = last_valid[k]
+                    if k == "device":
+                        pt[k] = dict(last_valid[k])
+                    else:
+                        pt[k] = last_valid[k]
 
                 if "lat" in s:
                     pt["lat"] = s["lat"]
@@ -625,6 +701,8 @@ class ViewerHandler(BaseHTTPRequestHandler):
                     routes_map[route_id]["date_str"] = seg_info["time_str"][:16]
 
             routes_list = list(routes_map.values())
+            for r in routes_list:
+                r["mtime"], r["date_str"] = sanitize_route_segments(r["segments"])
             routes_list.sort(key=lambda r: r["mtime"], reverse=True)
             for r in routes_list:
                 r["segments"].sort(key=lambda s: int(s["segment_idx"]) if s["segment_idx"].isdigit() else s["segment_idx"])
@@ -687,6 +765,8 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 routes_map[route_id]["date_str"] = seg_info["time_str"][:16]
 
         routes_list = list(routes_map.values())
+        for r in routes_list:
+            r["mtime"], r["date_str"] = sanitize_route_segments(r["segments"])
         routes_list.sort(key=lambda r: r["mtime"], reverse=True)
         for r in routes_list:
             r["segments"].sort(key=lambda s: int(s["segment_idx"]) if s["segment_idx"].isdigit() else s["segment_idx"])

@@ -302,130 +302,90 @@
       top: 0; left: 0; right: 0; bottom: 0;
       pointer-events: none;
       display: flex;
-      flex-direction: column;
       justify-content: space-between;
-      padding: 16px;
+      align-items: flex-start;
+      padding: 14px;
       transition: opacity 0.2s;
     }
-    .hud-header {
-      display: flex;
-      justify-content: flex-end;
-      width: 100%;
-    }
-    .hud-status-badge {
-      background: rgba(15, 23, 42, 0.8);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 20px;
-      padding: 5px 14px;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 0.75rem;
-      font-weight: 800;
-      color: #94a3b8;
-      letter-spacing: 0.5px;
-      transition: all 0.25s;
-    }
-    .hud-status-badge.engaged {
-      border-color: #10b981;
-      color: #10b981;
-      background: rgba(6, 78, 59, 0.75);
-      box-shadow: 0 0 14px rgba(16, 185, 129, 0.55);
-    }
-    .status-indicator-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #94a3b8;
-    }
-    .hud-status-badge.engaged .status-indicator-dot {
-      background: #10b981;
-      box-shadow: 0 0 8px #10b981;
-    }
 
-    /* Left-Docked HUD Cluster */
+    /* Left-Docked Cockpit HUD Panel */
     .hud-left-panel {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 7px;
       width: fit-content;
-      margin-top: auto;
-      margin-bottom: 4px;
     }
     .hud-cluster-top {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
     }
-    .speedo-box {
-      background: rgba(15, 23, 42, 0.8);
+    .hud-tile {
+      width: 86px;
+      height: 86px;
+      box-sizing: border-box;
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 12px;
-      padding: 6px 14px;
+      padding: 6px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      min-width: 86px;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
     }
-    .speedo-val {
-      font-size: 2.6rem;
+    .hud-val {
+      font-size: 2.1rem;
       font-weight: 900;
       font-family: monospace;
       line-height: 1;
       color: #fff;
     }
-    .speedo-unit {
-      font-size: 0.7rem;
+    .hud-gear-val {
+      color: #38bdf8;
+    }
+    .hud-label {
+      font-size: 0.65rem;
       color: var(--text-muted);
       text-transform: uppercase;
       font-weight: 700;
+      margin-top: 3px;
     }
     .cruise-badge {
-      margin-top: 4px;
+      margin-top: 3px;
       background: #065f46;
       color: #6ee7b7;
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       font-weight: 700;
-      padding: 2px 6px;
+      padding: 1px 5px;
       border-radius: 4px;
     }
 
-    .steering-box {
-      background: rgba(15, 23, 42, 0.8);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      padding: 6px 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      min-width: 86px;
-    }
     .wheel-icon {
-      width: 54px;
-      height: 54px;
+      width: 44px;
+      height: 44px;
       transition: transform 0.08s cubic-bezier(0.1, 0.9, 0.2, 1);
-      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
     }
     .steer-deg {
-      font-size: 0.85rem;
+      font-size: 0.78rem;
       font-weight: 700;
       font-family: monospace;
       color: #93c5fd;
+      margin-top: 2px;
     }
 
     .pedals-box.fixed-pedals {
-      background: rgba(15, 23, 42, 0.8);
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px;
-      padding: 6px 12px;
+      padding: 6px 14px;
       display: flex;
-      gap: 12px;
+      gap: 16px;
       width: fit-content;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     }
     .pedal-bar-wrap {
       display: flex;
@@ -435,7 +395,7 @@
     }
     .pedal-meter {
       width: 14px;
-      height: 38px;
+      height: 34px;
       background: #1e293b;
       border-radius: 3px;
       position: relative;
@@ -453,20 +413,82 @@
     .pedal-label { font-size: 0.65rem; font-weight: 800; color: var(--text-muted); }
 
     .lead-badge.fixed-lead {
-      background: rgba(15, 23, 42, 0.8);
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px;
       padding: 6px 12px;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 700;
       display: flex;
       align-items: center;
       gap: 8px;
       width: fit-content;
-      min-width: 140px;
+      min-width: 130px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     }
     .lead-dot { width: 9px; height: 9px; border-radius: 50%; background: #64748b; }
+
+    /* Right HUD Badges: Status & Device Health */
+    .hud-right-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .hud-status-badge {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 5px 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: #94a3b8;
+      letter-spacing: 0.5px;
+      transition: all 0.25s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .hud-status-badge.engaged {
+      border-color: #10b981;
+      color: #10b981;
+      background: rgba(6, 78, 59, 0.85);
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.55);
+    }
+    .status-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+    .hud-status-badge.engaged .status-indicator-dot {
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .hud-device-badge {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 6px 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .dev-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dev-icon { font-size: 0.85rem; }
 
     .sync-badge {
       font-size: 0.75rem;
@@ -520,7 +542,7 @@
     /* Bottom: Map + Telemetry Card Layout */
     .split-bottom {
       flex: 1;
-      min-height: 160px;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -530,6 +552,8 @@
       grid-template-columns: 360px 1fr;
       gap: 12px;
       height: 100%;
+      min-height: 0;
+      overflow: hidden;
     }
 
     /* Map Card */
@@ -538,6 +562,7 @@
       border-radius: 10px;
       border: 1px solid var(--border-color);
       height: 100%;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -551,7 +576,7 @@
       color: var(--text-muted);
       flex-shrink: 0;
     }
-    #map { flex: 1; width: 100%; height: 100%; }
+    #map { flex: 1; width: 100%; height: 100%; min-height: 0; }
 
     /* Telemetry Card on Right */
     .telemetry-card {
@@ -563,6 +588,8 @@
       flex-direction: column;
       gap: 8px;
       height: 100%;
+      min-height: 0;
+      overflow: hidden;
     }
     .card-title-bar {
       display: flex;
@@ -600,7 +627,7 @@
       position: relative;
       width: 100%;
       flex: 1;
-      min-height: 110px;
+      min-height: 50px;
       background: #0c0e15;
       border-radius: 6px;
       border: 1px solid var(--border-color);
@@ -610,6 +637,7 @@
     canvas#chartCanvas {
       width: 100%;
       height: 100%;
+      min-height: 0;
       display: block;
     }
     .chart-tooltip {
@@ -629,7 +657,11 @@
     /* Bottom Instantaneous Metrics Row */
     .metrics-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 8px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
       gap: 8px;
       flex-shrink: 0;
       margin-top: 2px;
@@ -713,9 +745,12 @@
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                <input type="checkbox" id="hudToggle" checked onchange="toggleHud()" /> HUD 儀表疊加
+                <input type="checkbox" id="hudToggle" checked onchange="toggleHud()" /> HUD 儀表
               </label>
-              <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 8px;">
+              <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 6px;">
+                <input type="checkbox" id="deviceHealthToggle" checked onchange="toggleDeviceHealth()" /> 裝置健康度
+              </label>
+              <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: 6px;">
                 <input type="checkbox" id="autoNext" checked /> 自動播放下段
               </label>
             </div>
@@ -726,31 +761,32 @@
 
             <!-- Cockpit HUD Overlay -->
             <div class="hud-overlay" id="hudOverlay">
-              <div class="hud-header">
-                <div class="hud-status-badge" id="hudStatusBadge">
-                  <span class="status-indicator-dot"></span>
-                  <span id="hudStatusText">MANUAL / 手動駕駛</span>
-                </div>
-              </div>
-
               <!-- Left-Docked Cockpit HUD Panel -->
               <div class="hud-left-panel">
-                <!-- Row 1: Speedometer on Left, Corolla Cross Steering Wheel on Right -->
+                <!-- Row 1: Speedometer, Gear, Corolla Cross Steering Wheel (3 Equal Tiles) -->
                 <div class="hud-cluster-top">
-                  <div class="speedo-box">
-                    <span class="speedo-val" id="hudSpeed">0</span>
-                    <span class="speedo-unit">KM/H</span>
+                  <!-- 1. Speed Tile -->
+                  <div class="hud-tile speedo-box">
+                    <span class="hud-val" id="hudSpeed">0</span>
+                    <span class="hud-label">KM/H</span>
                     <span class="cruise-badge" id="hudCruise" style="display:none;">SET 0</span>
                   </div>
-                  <div class="steering-box">
-                    <!-- Toyota Corolla Cross 3-Spoke Steering Wheel with Authentic Toyota Emblem -->
+
+                  <!-- 2. Gear Tile -->
+                  <div class="hud-tile gear-box">
+                    <span class="hud-val hud-gear-val" id="hudGear">D</span>
+                    <span class="hud-label">GEAR</span>
+                  </div>
+
+                  <!-- 3. Steering Tile with Corolla Cross Steering Wheel -->
+                  <div class="hud-tile steering-box">
                     <svg class="wheel-icon" id="hudWheel" viewBox="0 0 120 120">
                       <defs>
                         <radialGradient id="hubGrad" cx="50%" cy="50%" r="50%">
                           <stop offset="0%" stop-color="#334155"/>
                           <stop offset="100%" stop-color="#0f172a"/>
                         </radialGradient>
-                        <linearGradient id="rimGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%">
                           <stop offset="0%" stop-color="#60a5fa"/>
                           <stop offset="100%" stop-color="#2563eb"/>
                         </linearGradient>
@@ -808,6 +844,20 @@
                 <div class="lead-badge fixed-lead" id="hudLead">
                   <div class="lead-dot" id="leadDot"></div>
                   <span>前車距離: <strong id="hudLeadDist">--</strong> m</span>
+                </div>
+              </div>
+
+              <!-- Right-Docked Status & Device Health Panel -->
+              <div class="hud-right-panel">
+                <div class="hud-status-badge" id="hudStatusBadge">
+                  <span class="status-indicator-dot"></span>
+                  <span id="hudStatusText">⚪ MANUAL / 手動駕駛</span>
+                </div>
+                <div class="hud-device-badge" id="hudDeviceBadge">
+                  <div class="dev-item" title="CPU 最高核心溫度"><span class="dev-icon">🔥</span><span id="hudDevCpu">--°C</span></div>
+                  <div class="dev-item" title="風扇目標轉速"><span class="dev-icon">💨</span><span id="hudDevFan">--%</span></div>
+                  <div class="dev-item" title="記憶體使用率"><span class="dev-icon">🧠</span><span id="hudDevMem">--%</span></div>
+                  <div class="dev-item" title="儲存剩餘空間"><span class="dev-icon">💾</span><span id="hudDevStorage">--%</span></div>
                 </div>
               </div>
             </div>
@@ -868,6 +918,10 @@
                 <span class="pill-val" id="statSpeed">0 <small>km/h</small></span>
               </div>
               <div class="metric-pill">
+                <span class="pill-label">檔位</span>
+                <span class="pill-val" id="statGear" style="color:#38bdf8;">D</span>
+              </div>
+              <div class="metric-pill">
                 <span class="pill-label">方向盤</span>
                 <span class="pill-val" id="statSteer">0.0 <small>deg</small></span>
               </div>
@@ -878,6 +932,14 @@
               <div class="metric-pill">
                 <span class="pill-label">前車距離</span>
                 <span class="pill-val" id="statLead">-- <small>m</small></span>
+              </div>
+              <div class="metric-pill dev-metric-pill">
+                <span class="pill-label">CPU 溫度</span>
+                <span class="pill-val" id="statDevCpu">-- <small>°C</small></span>
+              </div>
+              <div class="metric-pill dev-metric-pill">
+                <span class="pill-label">裝置容量</span>
+                <span class="pill-val" id="statDevStorage">-- <small>%</small></span>
               </div>
             </div>
           </div>
@@ -1104,7 +1166,11 @@
             <span>${headerTitle}</span>
             <span>${r.segments.length} 段</span>
           </div>`;
-        r.segments.forEach(s => {
+        const segs = [...r.segments];
+        segs.sort((a, b) => {
+          return sortOrder === 'desc' ? (b.mtime - a.mtime) : (a.mtime - b.mtime);
+        });
+        segs.forEach(s => {
           const isActive = currentSegment === s.name ? 'active' : '';
           const timeLabel = s.time_short ? ` · ${s.time_short}` : '';
           html += `<div class="seg-item ${isActive}" onclick="selectSegment('${s.name}')">
@@ -1194,6 +1260,15 @@
       document.getElementById('hudOverlay').style.opacity = checked ? '1' : '0';
     }
 
+    function toggleDeviceHealth() {
+      const checked = document.getElementById('deviceHealthToggle').checked;
+      const badge = document.getElementById('hudDeviceBadge');
+      if (badge) badge.style.display = checked ? 'flex' : 'none';
+      document.querySelectorAll('.dev-metric-pill').forEach(el => {
+        el.style.display = checked ? 'flex' : 'none';
+      });
+    }
+
     function toggleMetric(el) {
       const m = el.dataset.metric;
       activeMetrics[m] = !activeMetrics[m];
@@ -1222,16 +1297,24 @@
         endDrag(e);
         return;
       }
-      const containerRect = document.querySelector('.content-area').getBoundingClientRect();
+      const container = document.querySelector('.content-area');
+      const containerRect = container.getBoundingClientRect();
       const newTopHeight = e.clientY - containerRect.top - 6;
-      if (newTopHeight >= 180 && newTopHeight <= containerRect.height - 150) {
-        splitTop.style.flex = 'none';
-        splitTop.style.height = `${newTopHeight}px`;
-        localStorage.setItem('viewer_top_height', newTopHeight);
-        if (map) map.invalidateSize();
-        resizeCanvas();
-        drawChart();
-      }
+      const minTop = 180;
+      const maxTop = containerRect.height - 140;
+      const clampedTop = Math.max(minTop, Math.min(newTopHeight, maxTop));
+
+      splitTop.style.flex = 'none';
+      splitTop.style.height = `${clampedTop}px`;
+
+      const newBottomHeight = Math.max(0, containerRect.height - clampedTop - 12);
+      splitBottom.style.flex = 'none';
+      splitBottom.style.height = `${newBottomHeight}px`;
+
+      localStorage.setItem('viewer_top_height', clampedTop);
+      if (map) map.invalidateSize();
+      resizeCanvas();
+      drawChart();
     });
 
     function endDrag(e) {
@@ -1255,6 +1338,11 @@
     window.addEventListener('mouseup', endDrag);
 
     window.addEventListener('resize', () => {
+      const container = document.querySelector('.content-area');
+      if (container && splitTop.style.height) {
+        const topH = parseInt(splitTop.style.height, 10);
+        splitBottom.style.height = `${Math.max(0, container.clientHeight - topH - 12)}px`;
+      }
       if (map) map.invalidateSize();
       resizeCanvas();
       drawChart();
@@ -1263,8 +1351,21 @@
     // Restore saved height
     const savedHeight = localStorage.getItem('viewer_top_height');
     if (savedHeight) {
-      splitTop.style.flex = 'none';
-      splitTop.style.height = `${savedHeight}px`;
+      const h = parseInt(savedHeight, 10);
+      if (h >= 180) {
+        splitTop.style.flex = 'none';
+        splitTop.style.height = `${h}px`;
+        setTimeout(() => {
+          const container = document.querySelector('.content-area');
+          if (container) {
+            splitBottom.style.flex = 'none';
+            splitBottom.style.height = `${Math.max(0, container.clientHeight - h - 12)}px`;
+            if (map) map.invalidateSize();
+            resizeCanvas();
+            drawChart();
+          }
+        }, 50);
+      }
     }
 
     // Synchronized Video Playback Update
@@ -1319,6 +1420,12 @@
       document.getElementById('hudSpeed').innerText = Math.round(pt.speed || 0);
       document.getElementById('statSpeed').innerHTML = `${Math.round(pt.speed || 0)} <small>km/h</small>`;
 
+      // Gear
+      const gear = pt.gear || 'D';
+      document.getElementById('hudGear').innerText = gear;
+      const statGear = document.getElementById('statGear');
+      if (statGear) statGear.innerText = gear;
+
       const steer = (pt.steer || 0).toFixed(1);
       document.getElementById('hudSteer').innerText = `${steer}°`;
       document.getElementById('statSteer').innerHTML = `${steer} <small>deg</small>`;
@@ -1344,6 +1451,38 @@
         document.getElementById('statLead').innerHTML = `-- <small>m</small>`;
         if (leadDot) leadDot.style.background = '#64748b';
       }
+
+      // Device Health
+      if (pt.device) {
+        const dev = pt.device;
+        if (dev.cpu_temp != null) {
+          const hudCpu = document.getElementById('hudDevCpu');
+          if (hudCpu) hudCpu.innerText = `${dev.cpu_temp}°C`;
+          const statCpu = document.getElementById('statDevCpu');
+          if (statCpu) statCpu.innerHTML = `${dev.cpu_temp} <small>°C</small>`;
+        }
+        if (dev.fan_pct != null) {
+          const hudFan = document.getElementById('hudDevFan');
+          if (hudFan) hudFan.innerText = `${dev.fan_pct}%`;
+        }
+        if (dev.mem_pct != null) {
+          const hudMem = document.getElementById('hudDevMem');
+          if (hudMem) hudMem.innerText = `${dev.mem_pct}%`;
+        }
+        if (dev.storage_pct != null) {
+          const hudSto = document.getElementById('hudDevStorage');
+          if (hudSto) hudSto.innerText = `${dev.storage_pct}%`;
+          const statSto = document.getElementById('statDevStorage');
+          if (statSto) statSto.innerHTML = `${dev.storage_pct} <small>%</small>`;
+        }
+      }
+
+      // GPS Marker on Map
+      if (pt.lat && pt.lon && carMarker && map) {
+        carMarker.setLatLng([pt.lat, pt.lon]);
+        map.panTo([pt.lat, pt.lon], { animate: true, duration: 0.2 });
+      }
+    }
 
       // GPS Marker on Map
       if (pt.lat && pt.lon && carMarker && map) {
