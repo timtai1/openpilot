@@ -285,6 +285,10 @@
       justify-content: center;
       align-items: center;
       overflow: hidden;
+      transition: box-shadow 0.25s ease-in-out;
+    }
+    .video-viewport.engaged {
+      box-shadow: inset 0 0 0 4px #10b981, inset 0 0 30px rgba(16, 185, 129, 0.45);
     }
     video {
       width: 100%;
@@ -300,33 +304,80 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 20px;
+      padding: 16px;
       transition: opacity 0.2s;
     }
-    .hud-top {
+    .hud-header {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+      justify-content: flex-end;
+      width: 100%;
+    }
+    .hud-status-badge {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      padding: 5px 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: #94a3b8;
+      letter-spacing: 0.5px;
+      transition: all 0.25s;
+    }
+    .hud-status-badge.engaged {
+      border-color: #10b981;
+      color: #10b981;
+      background: rgba(6, 78, 59, 0.75);
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.55);
+    }
+    .status-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #94a3b8;
+    }
+    .hud-status-badge.engaged .status-indicator-dot {
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    /* Left-Docked HUD Cluster */
+    .hud-left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: fit-content;
+      margin-top: auto;
+      margin-bottom: 4px;
+    }
+    .hud-cluster-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     .speedo-box {
-      background: rgba(15, 23, 42, 0.75);
+      background: rgba(15, 23, 42, 0.8);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 12px;
-      padding: 10px 18px;
+      padding: 6px 14px;
       display: flex;
       flex-direction: column;
       align-items: center;
+      min-width: 86px;
     }
     .speedo-val {
-      font-size: 2.8rem;
+      font-size: 2.6rem;
       font-weight: 900;
       font-family: monospace;
       line-height: 1;
       color: #fff;
     }
     .speedo-unit {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
       text-transform: uppercase;
       font-weight: 700;
@@ -335,66 +386,56 @@
       margin-top: 4px;
       background: #065f46;
       color: #6ee7b7;
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       font-weight: 700;
       padding: 2px 6px;
       border-radius: 4px;
     }
+
     .steering-box {
-      background: rgba(15, 23, 42, 0.75);
+      background: rgba(15, 23, 42, 0.8);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 12px;
-      padding: 10px 14px;
+      padding: 6px 10px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 3px;
+      min-width: 86px;
     }
     .wheel-icon {
-      width: 48px;
-      height: 48px;
-      transition: transform 0.05s linear;
+      width: 54px;
+      height: 54px;
+      transition: transform 0.08s cubic-bezier(0.1, 0.9, 0.2, 1);
+      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
     }
     .steer-deg {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: 700;
       font-family: monospace;
       color: #93c5fd;
     }
 
-    .hud-bottom {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-    }
-    .lead-badge {
-      background: rgba(15, 23, 42, 0.75);
+    .pedals-box.fixed-pedals {
+      background: rgba(15, 23, 42, 0.8);
       backdrop-filter: blur(8px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px;
-      padding: 6px 14px;
-      font-size: 0.85rem;
-      font-weight: 700;
+      padding: 6px 12px;
       display: flex;
-      align-items: center;
-      gap: 8px;
+      gap: 12px;
+      width: fit-content;
     }
-    .lead-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
-    .pedals-box { display: flex; gap: 10px; }
     .pedal-bar-wrap {
-      background: rgba(15, 23, 42, 0.75);
-      border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      padding: 6px 10px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
     }
     .pedal-meter {
       width: 14px;
-      height: 50px;
+      height: 38px;
       background: #1e293b;
       border-radius: 3px;
       position: relative;
@@ -411,6 +452,42 @@
     .brake-fill { background: var(--red); }
     .pedal-label { font-size: 0.65rem; font-weight: 800; color: var(--text-muted); }
 
+    .lead-badge.fixed-lead {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      min-width: 140px;
+    }
+    .lead-dot { width: 9px; height: 9px; border-radius: 50%; background: #64748b; }
+
+    .sync-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #93c5fd;
+    }
+    .sync-badge.success {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+    }
+    .sync-badge.error {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
     /* Draggable Horizontal Splitter */
     .horizontal-splitter {
       height: 12px;
@@ -422,6 +499,7 @@
       margin: 4px 0;
       z-index: 10;
       flex-shrink: 0;
+      touch-action: none;
       transition: background 0.15s;
     }
     .horizontal-splitter:hover, .horizontal-splitter.dragging {
@@ -441,11 +519,11 @@
 
     /* Bottom: Map + Telemetry Card Layout */
     .split-bottom {
-      height: 290px;
-      min-height: 180px;
+      flex: 1;
+      min-height: 160px;
       display: flex;
       flex-direction: column;
-      flex-shrink: 0;
+      overflow: hidden;
     }
     .bottom-container {
       display: grid;
@@ -593,10 +671,12 @@
       </div>
 
       <div class="path-bar" id="remoteBar" style="display:none;">
-        <span>機子 IP:</span>
+        <span>裝置 IP:</span>
         <input type="text" id="ipInput" class="path-input" style="width:130px;" placeholder="192.168.x.x" />
         <button class="btn btn-primary" onclick="connectDevice()">連線</button>
+        <button class="btn btn-secondary" id="syncBtn" onclick="startSync()" disabled title="需連線成功後方可同步">📥 同步至本機</button>
         <div class="status-indicator" id="deviceStatus">⚪ 未連線</div>
+        <div class="sync-badge" id="syncStatusBadge" style="display:none;"></div>
       </div>
     </div>
   </header>
@@ -626,9 +706,10 @@
         <div class="player-card">
           <div class="player-toolbar">
             <div class="cam-tabs">
-              <button class="cam-tab active" onclick="switchCamera('fcamera')">🚗 前方鏡頭 (Road)</button>
-              <button class="cam-tab" onclick="switchCamera('ecamera')">📐 廣角鏡頭 (Wide)</button>
-              <button class="cam-tab" onclick="switchCamera('qcamera')">⚡ 預覽 (Quick)</button>
+              <button class="cam-tab active" id="tab_fcamera" onclick="switchCamera('fcamera')">🚗 前方鏡頭 (Road)</button>
+              <button class="cam-tab" id="tab_ecamera" onclick="switchCamera('ecamera')">📐 廣角鏡頭 (Wide)</button>
+              <button class="cam-tab" id="tab_dcamera" onclick="switchCamera('dcamera')" style="display:none;">👤 駕駛室鏡頭 (Cabin)</button>
+              <button class="cam-tab" id="tab_qcamera" onclick="switchCamera('qcamera')">⚡ 預覽 (Quick)</button>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
               <label style="font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
@@ -640,35 +721,79 @@
             </div>
           </div>
 
-          <div class="video-viewport">
+          <div class="video-viewport" id="videoViewport">
             <video id="videoPlayer" controls autoplay playsinline></video>
 
             <!-- Cockpit HUD Overlay -->
             <div class="hud-overlay" id="hudOverlay">
-              <div class="hud-top">
-                <div class="speedo-box">
-                  <span class="speedo-val" id="hudSpeed">0</span>
-                  <span class="speedo-unit">KM/H</span>
-                  <span class="cruise-badge" id="hudCruise" style="display:none;">CRUISE 0</span>
-                </div>
-                <div class="steering-box">
-                  <svg class="wheel-icon" id="hudWheel" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="42" stroke="#60a5fa" stroke-width="8" fill="none"/>
-                    <circle cx="50" cy="50" r="14" fill="#3b82f6"/>
-                    <line x1="50" y1="50" x2="50" y2="8" stroke="#60a5fa" stroke-width="6"/>
-                    <line x1="50" y1="50" x2="14" y2="68" stroke="#60a5fa" stroke-width="6"/>
-                    <line x1="50" y1="50" x2="86" y2="68" stroke="#60a5fa" stroke-width="6"/>
-                  </svg>
-                  <span class="steer-deg" id="hudSteer">0.0°</span>
+              <div class="hud-header">
+                <div class="hud-status-badge" id="hudStatusBadge">
+                  <span class="status-indicator-dot"></span>
+                  <span id="hudStatusText">MANUAL / 手動駕駛</span>
                 </div>
               </div>
 
-              <div class="hud-bottom">
-                <div class="lead-badge" id="hudLead" style="display: none;">
-                  <div class="lead-dot" id="leadDot"></div>
-                  <span>前車距離: <strong id="hudLeadDist">--</strong> m</span>
+              <!-- Left-Docked Cockpit HUD Panel -->
+              <div class="hud-left-panel">
+                <!-- Row 1: Speedometer on Left, Corolla Cross Steering Wheel on Right -->
+                <div class="hud-cluster-top">
+                  <div class="speedo-box">
+                    <span class="speedo-val" id="hudSpeed">0</span>
+                    <span class="speedo-unit">KM/H</span>
+                    <span class="cruise-badge" id="hudCruise" style="display:none;">SET 0</span>
+                  </div>
+                  <div class="steering-box">
+                    <!-- Toyota Corolla Cross 3-Spoke Steering Wheel with Authentic Toyota Emblem -->
+                    <svg class="wheel-icon" id="hudWheel" viewBox="0 0 120 120">
+                      <defs>
+                        <radialGradient id="hubGrad" cx="50%" cy="50%" r="50%">
+                          <stop offset="0%" stop-color="#334155"/>
+                          <stop offset="100%" stop-color="#0f172a"/>
+                        </radialGradient>
+                        <linearGradient id="rimGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stop-color="#60a5fa"/>
+                          <stop offset="100%" stop-color="#2563eb"/>
+                        </linearGradient>
+                        <linearGradient id="silverTrim" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="#f8fafc"/>
+                          <stop offset="100%" stop-color="#94a3b8"/>
+                        </linearGradient>
+                      </defs>
+                      <!-- Outer Wheel Rim with Thumb Rests (Corolla Cross 3-spoke) -->
+                      <circle cx="60" cy="60" r="52" fill="none" stroke="#1e293b" stroke-width="11"/>
+                      <circle cx="60" cy="60" r="52" fill="none" stroke="url(#rimGrad)" stroke-width="3" opacity="0.85"/>
+                      <!-- 10 & 2 o clock thumb grips -->
+                      <path d="M 23,30 C 20,38 20,44 23,50" stroke="#475569" stroke-width="5" fill="none" stroke-linecap="round"/>
+                      <path d="M 97,30 C 100,38 100,44 97,50" stroke="#475569" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+                      <!-- Left Horizontal Spoke (Media & Volume Buttons) -->
+                      <path d="M 12,56 L 42,52 L 42,68 L 12,64 Z" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+                      <rect x="22" y="55" width="14" height="10" rx="2" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+                      <circle cx="29" cy="60" r="2" fill="#94a3b8"/>
+
+                      <!-- Right Horizontal Spoke (ADAS / TSS Cruise Buttons) -->
+                      <path d="M 108,56 L 78,52 L 78,68 L 108,64 Z" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+                      <rect x="84" y="55" width="14" height="10" rx="2" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+                      <path d="M 88,60 L 94,60 M 91,57 L 91,63" stroke="#94a3b8" stroke-width="1.2"/>
+
+                      <!-- Bottom Vertical Center Spoke (Corolla Cross sleek V-spoke) -->
+                      <path d="M 52,72 L 55,106 L 65,106 L 68,72 Z" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+                      <path d="M 56,76 L 57,102 L 63,102 L 64,76 Z" fill="url(#silverTrim)" opacity="0.65"/>
+
+                      <!-- Center Hub Airbag Cover -->
+                      <path d="M 40,50 C 40,40 80,40 80,50 L 78,72 C 78,78 42,78 42,72 Z" fill="url(#hubGrad)" stroke="#475569" stroke-width="1.5"/>
+
+                      <!-- TOYOTA Oval Emblem in Center -->
+                      <ellipse cx="60" cy="57" rx="13" ry="9" fill="none" stroke="url(#silverTrim)" stroke-width="2.2"/>
+                      <ellipse cx="60" cy="57" rx="5" ry="8" fill="none" stroke="url(#silverTrim)" stroke-width="2"/>
+                      <ellipse cx="60" cy="53" rx="10.5" ry="4" fill="none" stroke="url(#silverTrim)" stroke-width="2"/>
+                    </svg>
+                    <span class="steer-deg" id="hudSteer">0.0°</span>
+                  </div>
                 </div>
-                <div class="pedals-box">
+
+                <!-- Row 2: Fixed BRAKE & GAS Pedals (Directly below speedo) -->
+                <div class="pedals-box fixed-pedals">
                   <div class="pedal-bar-wrap">
                     <div class="pedal-meter"><div class="pedal-fill brake-fill" id="hudBrakeFill"></div></div>
                     <span class="pedal-label">BRAKE</span>
@@ -677,6 +802,12 @@
                     <div class="pedal-meter"><div class="pedal-fill gas-fill" id="hudGasFill"></div></div>
                     <span class="pedal-label">GAS</span>
                   </div>
+                </div>
+
+                <!-- Row 3: Fixed Lead Car Distance (Directly below pedals) -->
+                <div class="lead-badge fixed-lead" id="hudLead">
+                  <div class="lead-dot" id="leadDot"></div>
+                  <span>前車距離: <strong id="hudLeadDist">--</strong> m</span>
                 </div>
               </div>
             </div>
@@ -789,6 +920,7 @@
       localStorage.setItem('comma_ip', ip);
 
       const statusEl = document.getElementById('deviceStatus');
+      const syncBtn = document.getElementById('syncBtn');
       statusEl.innerHTML = '🔄 連線中...';
       statusEl.style.color = '#9ca3af';
 
@@ -798,15 +930,86 @@
         if (data.connected) {
           statusEl.innerHTML = `🟢 已連線 (${data.storage || '30G'})`;
           statusEl.style.color = '#34d399';
+          if (syncBtn) syncBtn.disabled = false;
+          checkSyncStatus();
           loadRoutes();
         } else {
           statusEl.innerHTML = `🔴 連線失敗`;
           statusEl.style.color = '#f87171';
+          if (syncBtn) syncBtn.disabled = true;
           alert(`無法連線至 Comma (${ip})：\n${data.error || '連線逾時'}`);
         }
       } catch (e) {
         statusEl.innerHTML = `🔴 錯誤`;
         statusEl.style.color = '#f87171';
+        if (syncBtn) syncBtn.disabled = true;
+      }
+    }
+
+    let syncInterval = null;
+
+    async function checkSyncStatus() {
+      try {
+        const res = await fetch('/api/sync/status');
+        const data = await res.json();
+        const badge = document.getElementById('syncStatusBadge');
+        const btn = document.getElementById('syncBtn');
+
+        if (data.is_running) {
+          badge.style.display = 'inline-block';
+          badge.innerText = `🔄 ${data.progress_text || '同步中...'}`;
+          badge.className = 'sync-badge';
+          if (btn) btn.disabled = true;
+          if (!syncInterval) {
+            syncInterval = setInterval(checkSyncStatus, 1500);
+          }
+        } else {
+          if (syncInterval) {
+            clearInterval(syncInterval);
+            syncInterval = null;
+          }
+          if (btn) btn.disabled = false;
+          if (data.progress_text && data.progress_text !== '閒置中') {
+            badge.style.display = 'inline-block';
+            badge.innerText = data.progress_text;
+            badge.className = 'sync-badge ' + (data.error ? 'error' : 'success');
+            if (data.percent === 100 && currentSource === 'local') {
+              loadRoutes();
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to check sync status", e);
+      }
+    }
+
+    async function startSync() {
+      const ip = document.getElementById('ipInput').value.trim();
+      if (!ip) {
+        alert("請先輸入 Comma 裝置 IP 並連線");
+        return;
+      }
+      const defaultDest = localStorage.getItem('comma_local_path') || document.getElementById('pathInput').value || '~/Downloads/comma_realdata';
+      const dest = prompt("請確認要將 Comma 影片同步下載至哪個本機目錄：", defaultDest);
+      if (!dest) return;
+
+      localStorage.setItem('comma_local_path', dest);
+      document.getElementById('pathInput').value = dest;
+
+      try {
+        const btn = document.getElementById('syncBtn');
+        if (btn) btn.disabled = true;
+        const res = await fetch(`/api/sync/start?ip=${encodeURIComponent(ip)}&dest=${encodeURIComponent(dest)}`);
+        const data = await res.json();
+        if (data.success) {
+          checkSyncStatus();
+        } else {
+          alert(`啟動同步失敗: ${data.message}`);
+          if (btn) btn.disabled = false;
+        }
+      } catch (e) {
+        alert(`無法連線至後端伺服器: ${e.message}`);
+        document.getElementById('syncBtn').disabled = false;
       }
     }
 
@@ -908,6 +1111,7 @@
             <span class="seg-name">第 #${s.segment_idx} 段${timeLabel}</span>
             <div class="seg-tags">
               ${s.has_fcamera ? '<span class="badge badge-video">CAM</span>' : ''}
+              ${s.has_dcamera ? '<span class="badge badge-video" style="background:#7c3aed;">CAB</span>' : ''}
               ${s.has_log ? '<span class="badge badge-log">LOG</span>' : ''}
             </div>
           </div>`;
@@ -935,6 +1139,25 @@
       currentSegment = segName;
       renderRoutesList();
 
+      // Check if this segment has driver cabin camera
+      let foundSeg = null;
+      for (const r of currentRoutes) {
+        for (const s of r.segments) {
+          if (s.name === segName) { foundSeg = s; break; }
+        }
+        if (foundSeg) break;
+      }
+      const dcamTab = document.getElementById('tab_dcamera');
+      if (dcamTab) {
+        dcamTab.style.display = (foundSeg && foundSeg.has_dcamera) ? 'inline-block' : 'none';
+        if (currentCam === 'dcamera' && (!foundSeg || !foundSeg.has_dcamera)) {
+          currentCam = 'fcamera';
+          document.querySelectorAll('.cam-tab').forEach(t => t.classList.remove('active'));
+          const fcamTab = document.getElementById('tab_fcamera');
+          if (fcamTab) fcamTab.classList.add('active');
+        }
+      }
+
       const q = getApiQuery();
       // Load Video
       video.src = `/api/video?segment=${encodeURIComponent(segName)}&cam=${currentCam}&${q}`;
@@ -954,7 +1177,9 @@
     function switchCamera(cam) {
       currentCam = cam;
       document.querySelectorAll('.cam-tab').forEach(t => t.classList.remove('active'));
-      event.target.classList.add('active');
+      const activeTab = document.getElementById(`tab_${cam}`);
+      if (activeTab) activeTab.classList.add('active');
+
       if (currentSegment) {
         const curTime = video.currentTime;
         const q = getApiQuery();
@@ -976,41 +1201,63 @@
       drawChart();
     }
 
-    // Draggable Splitter Implementation
+    // Draggable Splitter Implementation with Robust Pointer Events
     const splitter = document.getElementById('splitter');
     const splitTop = document.getElementById('splitTop');
     const splitBottom = document.getElementById('splitBottom');
     let isDragging = false;
 
-    splitter.addEventListener('mousedown', e => {
+    splitter.addEventListener('pointerdown', e => {
       isDragging = true;
+      splitter.setPointerCapture(e.pointerId);
       splitter.classList.add('dragging');
       document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
+      e.preventDefault();
     });
 
-    window.addEventListener('mousemove', e => {
+    splitter.addEventListener('pointermove', e => {
       if (!isDragging) return;
+      if (e.buttons === 0) {
+        endDrag(e);
+        return;
+      }
       const containerRect = document.querySelector('.content-area').getBoundingClientRect();
       const newTopHeight = e.clientY - containerRect.top - 6;
-      if (newTopHeight >= 200 && newTopHeight <= containerRect.height - 160) {
+      if (newTopHeight >= 180 && newTopHeight <= containerRect.height - 150) {
         splitTop.style.flex = 'none';
         splitTop.style.height = `${newTopHeight}px`;
         localStorage.setItem('viewer_top_height', newTopHeight);
         if (map) map.invalidateSize();
+        resizeCanvas();
         drawChart();
       }
     });
 
-    window.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        splitter.classList.remove('dragging');
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        if (map) map.invalidateSize();
-        drawChart();
-      }
+    function endDrag(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      try {
+        if (e && e.pointerId && splitter.hasPointerCapture(e.pointerId)) {
+          splitter.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) {}
+      splitter.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      if (map) map.invalidateSize();
+      resizeCanvas();
+      drawChart();
+    }
+
+    splitter.addEventListener('pointerup', endDrag);
+    splitter.addEventListener('pointercancel', endDrag);
+    window.addEventListener('mouseup', endDrag);
+
+    window.addEventListener('resize', () => {
+      if (map) map.invalidateSize();
+      resizeCanvas();
+      drawChart();
     });
 
     // Restore saved height
@@ -1052,6 +1299,22 @@
       const pt = telemetryData.timeline.find(p => p.t >= t) || telemetryData.timeline[telemetryData.timeline.length - 1];
       if (!pt) return;
 
+      // Engaged State (Green Border & Badge)
+      const isEngaged = !!pt.engaged;
+      const viewport = document.getElementById('videoViewport');
+      const statusBadge = document.getElementById('hudStatusBadge');
+      const statusText = document.getElementById('hudStatusText');
+
+      if (isEngaged) {
+        if (viewport) viewport.classList.add('engaged');
+        if (statusBadge) statusBadge.classList.add('engaged');
+        if (statusText) statusText.innerText = '🟢 ENGAGED / 輔助駕駛中';
+      } else {
+        if (viewport) viewport.classList.remove('engaged');
+        if (statusBadge) statusBadge.classList.remove('engaged');
+        if (statusText) statusText.innerText = '⚪ MANUAL / 手動駕駛';
+      }
+
       // HUD & Metric updates
       document.getElementById('hudSpeed').innerText = Math.round(pt.speed || 0);
       document.getElementById('statSpeed').innerHTML = `${Math.round(pt.speed || 0)} <small>km/h</small>`;
@@ -1064,23 +1327,22 @@
       const accel = (pt.aEgo || 0).toFixed(2);
       document.getElementById('statAccel').innerHTML = `${accel} <small>m/s²</small>`;
 
-      // Pedals
+      // Pedals (Fixed directly below speed)
       document.getElementById('hudBrakeFill').style.height = `${Math.min(100, (pt.brake || (pt.brake_pressed ? 100 : 0)))}%`;
       document.getElementById('hudGasFill').style.height = `${pt.gas_pressed ? 80 : (pt.speed > 0 ? 30 : 0)}%`;
 
-      // Lead car
-      const hudLead = document.getElementById('hudLead');
+      // Lead car (Fixed directly below pedals)
+      const leadDot = document.getElementById('leadDot');
       if (pt.lead_d != null) {
-        hudLead.style.display = 'flex';
         document.getElementById('hudLeadDist').innerText = pt.lead_d.toFixed(1);
         document.getElementById('statLead').innerHTML = `${pt.lead_d.toFixed(1)} <small>m</small>`;
-        const leadDot = document.getElementById('leadDot');
         if (pt.lead_d < 15) leadDot.style.background = '#ef4444';
         else if (pt.lead_d < 30) leadDot.style.background = '#f59e0b';
         else leadDot.style.background = '#10b981';
       } else {
-        hudLead.style.display = 'none';
+        document.getElementById('hudLeadDist').innerText = '--';
         document.getElementById('statLead').innerHTML = `-- <small>m</small>`;
+        if (leadDot) leadDot.style.background = '#64748b';
       }
 
       // GPS Marker on Map

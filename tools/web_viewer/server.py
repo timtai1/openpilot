@@ -12,8 +12,10 @@ import time
 import shutil
 import urllib.parse
 import subprocess
+import threading
+import re
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 # Auto-detect cereal directory for Cap'n Proto schemas
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -45,6 +47,131 @@ def get_ssh_cmd(ip: str, remote_cmd: str):
     cmd.extend([f"comma@{ip}", remote_cmd])
     return cmd
 
+
+class SyncManager:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.is_running = False
+        self.progress_text = "閒置中"
+        self.percent = 0
+        self.error = None
+        self.dest_dir = ""
+        self.last_sync_time = None
+
+    def start_sync(self, ip: str, dest_dir: str):
+        if not ip:
+            return False, "缺少裝置 IP"
+        with self.lock:
+            if self.is_running:
+                return False, "同步已在進行中"
+            self.is_running = True
+            self.progress_text = "正在準備同步..."
+            self.percent = 0
+            self.error = None
+            self.dest_dir = os.path.expanduser(dest_dir or DEFAULT_LOCAL_PATH)
+
+        thread = threading.Thread(target=self._run_sync, args=(ip, self.dest_dir), daemon=True)
+        thread.start()
+        return True, "已開始背景同步"
+
+    def _run_sync(self, ip: str, dest: str):
+        try:
+            os.makedirs(dest, exist_ok=True)
+            ssh_opt = "-o StrictHostKeyChecking=no -o ConnectTimeout=5"
+            if SSH_KEY and os.path.exists(SSH_KEY):
+                ssh_opt = f"-i {SSH_KEY} {ssh_opt}"
+
+            rsync_cmd = [
+                "rsync", "-avz", "--partial", "--info=progress2",
+                "-e", f"ssh {ssh_opt}",
+                f"comma@{ip}:/data/media/0/realdata/",
+                f"{dest}/"
+            ]
+
+            process = subprocess.Popen(
+                rsync_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+
+            for line in process.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) >= 2 and "%" in parts[1]:
+                    try:
+                        pct = int(parts[1].replace("%", ""))
+                        speed = parts[2] if len(parts) > 2 else ""
+                        with self.lock:
+                            self.percent = pct
+                            self.progress_text = f"同步中 {pct}% ({speed})"
+                    except Exception:
+                        pass
+                else:
+                    with self.lock:
+                        self.progress_text = f"傳輸中: {line[:30]}"
+
+            process.wait()
+            if process.returncode == 0:
+                with self.lock:
+                    self.is_running = False
+                    self.percent = 100
+                    self.progress_text = "✅ 同步完成"
+                    self.last_sync_time = time.strftime('%H:%M:%S')
+            else:
+                err = process.stderr.read()
+                with self.lock:
+                    self.is_running = False
+                    self.error = err or "Rsync 結束碼非零"
+                    self.progress_text = f"❌ 同步失敗: {self.error[:50]}"
+        except Exception as e:
+            with self.lock:
+                self.is_running = False
+                self.error = str(e)
+                self.progress_text = f"❌ 異常: {str(e)[:50]}"
+
+    def get_status(self):
+        with self.lock:
+            return {
+                "is_running": self.is_running,
+                "progress_text": self.progress_text,
+                "percent": self.percent,
+                "error": self.error,
+                "dest_dir": self.dest_dir,
+                "last_sync_time": self.last_sync_time
+            }
+
+sync_manager = SyncManager()
+
+
+def parse_segment_time(seg_name: str, sub_path: str, files: list[str]) -> tuple[float, str, str]:
+    """Returns (mtime, time_str, time_short). Prefers timestamp in name, falls back to original files."""
+    m = re.search(r"(\d{4}-\d{2}-\d{2})[-_](\d{2})[-:](\d{2})[-:](\d{2})", seg_name)
+    if m:
+        try:
+            dt_str = f"{m.group(1)} {m.group(2)}:{m.group(3)}:{m.group(4)}"
+            t_struct = time.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+            mt = time.mktime(t_struct)
+            return mt, dt_str, f"{m.group(2)}:{m.group(3)}:{m.group(4)}"
+        except Exception:
+            pass
+
+    orig_files = [f for f in ["qlog.zst", "rlog.zst", "fcamera.hevc", "ecamera.hevc", "dcamera.hevc", "qcamera.ts"] if f in files]
+    if orig_files and os.path.exists(sub_path):
+        try:
+            mt = min([os.path.getmtime(os.path.join(sub_path, f)) for f in orig_files])
+            return mt, time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mt)), time.strftime('%H:%M:%S', time.localtime(mt))
+        except Exception:
+            pass
+
+    mt = os.path.getmtime(sub_path) if os.path.exists(sub_path) else 0
+    t_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mt)) if mt else ""
+    t_short = time.strftime('%H:%M:%S', time.localtime(mt)) if mt else ""
+    return mt, t_str, t_short
+
 class TelemetryExtractor:
     def __init__(self):
         self._capnp_loaded = False
@@ -72,7 +199,9 @@ class TelemetryExtractor:
                 with open(cache_file, "r") as f:
                     cdata = json.load(f)
                     if cdata and cdata.get("points_count", 0) > 0 and cdata.get("duration", 0) < 300:
-                        return cdata
+                        # Ensure engaged key is in cache points
+                        if len(cdata.get("timeline", [])) > 0 and "engaged" in cdata["timeline"][0]:
+                            return cdata
             except Exception:
                 pass
 
@@ -135,7 +264,7 @@ class TelemetryExtractor:
             # Find first vehicle sensor event to anchor t=0
             first_mono = None
             for evt in events:
-                if evt.which() in ("carState", "controlsState", "radarState", "cameraOdometry"):
+                if evt.which() in ("carState", "controlsState", "selfdriveState", "radarState", "cameraOdometry"):
                     first_mono = evt.logMonoTime
                     break
             if first_mono is None:
@@ -158,7 +287,16 @@ class TelemetryExtractor:
                 sample = samples[bucket]
 
                 w = evt.which()
-                if w == "carState":
+                if w == "selfdriveState":
+                    sds = evt.selfdriveState
+                    sample["engaged"] = bool(sds.enabled)
+                    if hasattr(sds, "active"):
+                        sample["active"] = bool(sds.active)
+                elif w == "controlsState":
+                    ctrl = evt.controlsState
+                    if hasattr(ctrl, "enabled"):
+                        sample["engaged"] = bool(ctrl.enabled)
+                elif w == "carState":
                     cs = evt.carState
                     sample["speed"] = round(cs.vEgo * 3.6, 1)
                     sample["steer"] = round(cs.steeringAngleDeg, 1)
@@ -172,6 +310,8 @@ class TelemetryExtractor:
                         sample["vCruise"] = round(cs.vCruise, 1)
                     if hasattr(cs, "leftBlinker") and hasattr(cs, "rightBlinker"):
                         sample["blinker"] = -1 if cs.leftBlinker else (1 if cs.rightBlinker else 0)
+                    if hasattr(cs, "cruiseState") and hasattr(cs.cruiseState, "enabled"):
+                        sample["cruise_enabled"] = bool(cs.cruiseState.enabled)
                 elif w == "radarState":
                     rs = evt.radarState
                     if rs.leadOne.status:
@@ -191,14 +331,16 @@ class TelemetryExtractor:
             # Sort by time and interpolate missing fields
             sorted_times = sorted(samples.keys())
             timeline = []
-            last_valid = {"speed": 0, "steer": 0, "aEgo": 0, "gas_pressed": False, "brake_pressed": False, "brake": 0, "vCruise": 0, "lead_d": None, "lead_v": None, "lat": None, "lon": None, "bearing": 0, "blinker": 0}
+            last_valid = {"speed": 0, "steer": 0, "aEgo": 0, "gas_pressed": False, "brake_pressed": False, "brake": 0, "vCruise": 0, "lead_d": None, "lead_v": None, "lat": None, "lon": None, "bearing": 0, "blinker": 0, "engaged": False}
 
             for t in sorted_times:
                 s = samples[t]
                 pt = {"t": t}
-                for k in ["speed", "steer", "aEgo", "gas_pressed", "brake_pressed", "brake", "vCruise", "lead_d", "lead_v", "blinker"]:
+                for k in ["speed", "steer", "aEgo", "gas_pressed", "brake_pressed", "brake", "vCruise", "lead_d", "lead_v", "blinker", "engaged"]:
                     if k in s:
                         last_valid[k] = s[k]
+                    elif k == "engaged" and ("cruise_enabled" in s):
+                        last_valid[k] = s["cruise_enabled"]
                     pt[k] = last_valid[k]
 
                 if "lat" in s:
@@ -309,6 +451,42 @@ class ViewerHandler(BaseHTTPRequestHandler):
             self.handle_api_telemetry(qs)
         elif path == "/api/video":
             self.handle_api_video(qs)
+        elif path == "/api/sync/status":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(sync_manager.get_status()).encode("utf-8"))
+        elif path == "/api/sync/start":
+            ip = qs.get("ip", [""])[0].strip()
+            dest = qs.get("dest", [DEFAULT_LOCAL_PATH])[0].strip()
+            success, msg = sync_manager.start_sync(ip, dest)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": success, "message": msg, "status": sync_manager.get_status()}).encode("utf-8"))
+        else:
+            self.send_error(404, "Not Found")
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path == "/api/sync/start":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else ""
+            data = {}
+            if body:
+                try:
+                    data = json.loads(body)
+                except Exception:
+                    pass
+            qs = urllib.parse.parse_qs(parsed.query)
+            ip = data.get("ip") or qs.get("ip", [""])[0].strip()
+            dest = data.get("dest") or qs.get("dest", [DEFAULT_LOCAL_PATH])[0].strip()
+            success, msg = sync_manager.start_sync(ip, dest)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": success, "message": msg, "status": sync_manager.get_status()}).encode("utf-8"))
         else:
             self.send_error(404, "Not Found")
 
@@ -388,8 +566,16 @@ class ViewerHandler(BaseHTTPRequestHandler):
             remote_script = (
                 "python3 -c \""
                 "import os, json; root = '/data/media/0/realdata'; "
-                "print(json.dumps([{'name': d, 'files': os.listdir(os.path.join(root, d)), 'mtime': os.path.getmtime(os.path.join(root, d))} "
-                "for d in sorted(os.listdir(root)) if os.path.isdir(os.path.join(root, d))] if os.path.exists(root) else []))\""
+                "res = []; "
+                "if os.path.exists(root): "
+                "    for d in sorted(os.listdir(root)): "
+                "        p = os.path.join(root, d); "
+                "        if os.path.isdir(p): "
+                "            files = os.listdir(p); "
+                "            orig = [f for f in ['qlog.zst', 'rlog.zst', 'fcamera.hevc', 'ecamera.hevc', 'dcamera.hevc', 'qcamera.ts'] if f in files]; "
+                "            mt = min([os.path.getmtime(os.path.join(p, f)) for f in orig]) if orig else os.path.getmtime(p); "
+                "            res.append({'name': d, 'files': files, 'mtime': mt}); "
+                "print(json.dumps(res))\""
             )
             cmd = get_ssh_cmd(ip, remote_script)
             try:
@@ -416,25 +602,31 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 route_id = f"{parts[0]}--{parts[1]}" if len(parts) >= 3 else d
                 seg_idx = parts[2] if len(parts) >= 3 else "0"
 
-                mt = item.get("mtime", 0)
+                mt, time_str, time_short = parse_segment_time(d, "", files)
+                if not mt:
+                    mt = item.get("mtime", 0)
+                    time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mt)) if mt else ""
+                    time_short = time.strftime('%H:%M:%S', time.localtime(mt)) if mt else ""
+
                 seg_info = {
                     "name": d,
                     "segment_idx": seg_idx,
                     "has_fcamera": any(f.startswith("fcamera") for f in files),
                     "has_ecamera": any(f.startswith("ecamera") for f in files),
+                    "has_dcamera": any(f.startswith("dcamera") for f in files),
                     "has_qcamera": any(f.startswith("qcamera") for f in files),
                     "has_log": any(f.endswith(".zst") for f in files),
                     "is_remote": True,
                     "mtime": mt,
-                    "time_str": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mt)) if mt else "",
-                    "time_short": time.strftime('%H:%M:%S', time.localtime(mt)) if mt else ""
+                    "time_str": time_str,
+                    "time_short": time_short
                 }
                 if route_id not in routes_map:
                     routes_map[route_id] = {
                         "route_id": route_id,
                         "segments": [],
                         "mtime": seg_info["mtime"],
-                        "date_str": seg_info["time_str"][:16]
+                        "date_str": seg_info["time_str"][:16] if seg_info["time_str"] else route_id
                     }
                 routes_map[route_id]["segments"].append(seg_info)
                 if seg_info["mtime"] > routes_map[route_id]["mtime"]:
@@ -474,19 +666,21 @@ class ViewerHandler(BaseHTTPRequestHandler):
             route_id = f"{parts[0]}--{parts[1]}" if len(parts) >= 3 else d
             seg_idx = parts[2] if len(parts) >= 3 else "0"
 
-            mt = os.path.getmtime(full_sub)
+            mt, time_str, time_short = parse_segment_time(d, full_sub, files)
+
             seg_info = {
                 "name": d,
                 "segment_idx": seg_idx,
                 "has_fcamera": "fcamera.hevc" in files or "fcamera.mp4" in files,
                 "has_ecamera": "ecamera.hevc" in files or "ecamera.mp4" in files,
+                "has_dcamera": "dcamera.hevc" in files or "dcamera.mp4" in files,
                 "has_qcamera": "qcamera.ts" in files or "qcamera.mp4" in files,
                 "has_log": "qlog.zst" in files or "rlog.zst" in files,
                 "cached_telemetry": ".telemetry.json" in files,
                 "is_remote": False,
                 "mtime": mt,
-                "time_str": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mt)) if mt else "",
-                "time_short": time.strftime('%H:%M:%S', time.localtime(mt)) if mt else ""
+                "time_str": time_str,
+                "time_short": time_short
             }
 
             if route_id not in routes_map:
@@ -494,7 +688,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
                     "route_id": route_id,
                     "segments": [],
                     "mtime": seg_info["mtime"],
-                    "date_str": seg_info["time_str"][:16]
+                    "date_str": seg_info["time_str"][:16] if seg_info["time_str"] else route_id
                 }
             routes_map[route_id]["segments"].append(seg_info)
             if seg_info["mtime"] > routes_map[route_id]["mtime"]:
@@ -596,13 +790,6 @@ class ViewerHandler(BaseHTTPRequestHandler):
             return
 
         self.serve_file_with_range(target_file)
-        target_file = ensure_mp4(seg_dir, cam)
-
-        if not target_file or not os.path.exists(target_file):
-            self.send_error(404, f"Video {cam} not found")
-            return
-
-        self.serve_file_with_range(target_file)
 
     def serve_file_with_range(self, filepath: str):
         file_size = os.path.getsize(filepath)
@@ -645,7 +832,7 @@ class ViewerHandler(BaseHTTPRequestHandler):
 
 
 def run_server():
-    server = HTTPServer(("0.0.0.0", PORT), ViewerHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), ViewerHandler)
     print(f"\n=======================================================")
     print(f"🚀 Openpilot Drive Viewer Running at: http://localhost:{PORT}")
     print(f"📂 Default Data Path: {DEFAULT_LOCAL_PATH}")
